@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14213d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Consumables">
+<title>Refining Consumables</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+:root{--navy:#14213d;--gold:#f5c442;--bg:#f4f6fa;--card:#fff;--text:#1d2433;--muted:#667085;--red:#c62828;--redbg:#fdecea;--green:#1b7f3b;--line:#e3e7ef}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font:17px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+header{background:var(--navy);color:#fff;padding:calc(env(safe-area-inset-top) + 14px) 16px 14px;position:sticky;top:0;z-index:5}
+header h1{margin:0;font-size:20px;font-weight:700}
+header h1 span{color:var(--gold)}
+main{padding:14px 14px calc(96px + env(safe-area-inset-bottom));max-width:640px;margin:0 auto}
+nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav button{flex:1;border:0;background:none;padding:10px 4px 12px;font-size:13px;color:var(--muted);min-height:64px;display:flex;flex-direction:column;align-items:center;gap:2px}
+nav button .ic{font-size:22px;line-height:1}
+nav button.on{color:var(--navy);font-weight:700}
+nav button.on .ic{transform:scale(1.1)}
+.card{background:var(--card);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.card h2{margin:0 0 8px;font-size:18px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.big{font-size:30px;font-weight:800}
+.unit{font-size:15px;color:var(--muted);font-weight:500}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.stat{background:var(--bg);border-radius:10px;padding:8px 10px}
+.stat b{display:block;font-size:17px}
+.stat small,.muted{color:var(--muted);font-size:13px}
+.warn{background:var(--redbg);color:var(--red);border-radius:10px;padding:8px 10px;font-weight:700;margin-top:8px;font-size:15px}
+.badge{font-size:12px;padding:3px 8px;border-radius:99px;background:#e8f5e9;color:var(--green);font-weight:700;white-space:nowrap}
+.badge.low{background:var(--redbg);color:var(--red)}
+table{width:100%;border-collapse:collapse;font-size:15px;margin-top:6px}
+th,td{padding:8px 4px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+th{font-size:12px;color:var(--muted);font-weight:600}
+tr.low td{color:var(--red);font-weight:700}
+tr.total td{font-weight:800;border-bottom:0}
+label{display:block;font-size:14px;font-weight:600;margin:12px 0 4px;color:#344054}
+input,select,textarea{width:100%;font-size:17px;padding:12px;border:1px solid #cdd3df;border-radius:10px;background:#fff;min-height:50px;color:var(--text)}
+textarea{min-height:70px}
+.btn{display:block;width:100%;border:0;border-radius:12px;padding:14px;font-size:17px;font-weight:700;min-height:54px;margin-top:14px;background:var(--navy);color:#fff}
+.btn.gold{background:var(--gold);color:var(--navy)}
+.btn.light{background:#e8ecf4;color:var(--navy)}
+.btn.danger{background:var(--redbg);color:var(--red)}
+.btn.sm{display:inline-block;width:auto;min-height:44px;padding:8px 14px;margin:0;font-size:15px}
+.seg{display:flex;background:#e8ecf4;border-radius:12px;padding:4px;gap:4px}
+.seg button{flex:1;border:0;border-radius:9px;padding:12px;font-size:16px;font-weight:700;background:none;color:var(--muted);min-height:48px}
+.seg button.on{background:#fff;color:var(--navy);box-shadow:0 1px 2px rgba(0,0,0,.1)}
+.seg button.on.in{color:var(--green)}
+.seg button.on.use{color:#b54708}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.hist{display:flex;gap:10px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--line)}
+.hist:last-child{border-bottom:0}
+.hist .tag{font-size:12px;font-weight:800;padding:4px 8px;border-radius:8px;min-width:46px;text-align:center}
+.tag.in{background:#e8f5e9;color:var(--green)}
+.tag.use{background:#fff4e5;color:#b54708}
+.hist .body{flex:1;min-width:0}
+.hist .acts{display:flex;flex-direction:column;gap:6px}
+.hist .acts button{border:0;background:#e8ecf4;border-radius:10px;min-width:48px;min-height:44px;font-size:18px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:2px solid #cdd3df;background:#fff;border-radius:12px;min-height:48px;min-width:58px;padding:8px 12px;font-size:16px;font-weight:700;color:var(--text)}
+.chip.on{border-color:var(--navy);background:var(--navy);color:#fff}
+.setitem{border:1px solid var(--line);border-radius:12px;padding:10px;margin-top:10px}
+.sizerow{display:grid;grid-template-columns:1fr 92px 48px;gap:6px;margin-top:6px;align-items:center}
+.sizerow input{min-height:46px;padding:8px}
+.iconbtn{border:0;background:var(--redbg);color:var(--red);border-radius:10px;min-height:46px;font-size:18px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));background:#111;color:#fff;padding:12px 18px;border-radius:12px;font-size:15px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20;max-width:90%}
+.toast.show{opacity:.92}
+.empty{text-align:center;color:var(--muted);padding:24px 10px}
+.hidden{display:none!important}
+.filters{display:flex;gap:8px}
+.filters select{min-height:46px;padding:8px}
+</style>
+</head>
+<body>
+<header><h1>⚗️ Refining <span>Consumables</span></h1></header>
+<main id="app"></main>
+<nav>
+  <button data-v="dash" class="on"><span class="ic">📊</span>Dashboard</button>
+  <button data-v="add"><span class="ic">➕</span>Add</button>
+  <button data-v="hist"><span class="ic">📜</span>History</button>
+  <button data-v="set"><span class="ic">⚙️</span>Settings</button>
+</nav>
+<div class="toast" id="toast"></div>
+<input type="file" id="restoreFile" accept="application/json,.json" class="hidden">
+<script>
+'use strict';
+const KEY = 'refining-consumables-v1';
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const DEFAULT_SIZES = ['#1','#2','#3','#4','#5','Jumbo','XL'];
+function defaultState() {
+  return {
+    version: 1,
+    items: [
+      { id: 'nitric', name: 'Nitric acid', unit: 'gallons', decimals: true, threshold: 2, sizes: [] },
+      { id: 'crucible', name: 'Crucibles', unit: 'pcs', decimals: false, threshold: 0,
+        sizes: DEFAULT_SIZES.map((n, i) => ({ id: 's' + (i + 1), name: n, threshold: 2, archived: false })) }
+    ],
+    entries: []
+  };
+}
+let S;
+function load() {
+  try { S = JSON.parse(localStorage.getItem(KEY)); } catch (e) { S = null; }
+  if (!S || !Array.isArray(S.items) || !Array.isArray(S.entries)) S = defaultState();
+}
+function save() { localStorage.setItem(KEY, JSON.stringify(S)); }
+load();
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+// ---------- helpers ----------
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const peso = n => '₱' + Number(n || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtQ = (n, item) => { const v = Math.round((Number(n) || 0) * 1000) / 1000; return item && !item.decimals ? String(Math.round(v)) : v.toLocaleString('en-GB', { maximumFractionDigits: 3 }); };
+const todayISO = () => { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+const fmtDate = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }); };
+const fmtDateNum = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
+const item = id => S.items.find(i => i.id === id);
+const size = (it, sid) => it && it.sizes ? it.sizes.find(s => s.id === sid) : null;
+const hasSizes = it => it && it.sizes && it.sizes.length > 0;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2200); }
+function weekStartISO() { const d = new Date(); const day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
+function monthStartISO() { return todayISO().slice(0, 8) + '01'; }
+
+function stats(itemId, sizeId) {
+  // sizeId undefined = all sizes combined
+  const wk = weekStartISO(), mo = monthStartISO();
+  const r = { stockIn: 0, used: 0, week: 0, month: 0, cost: 0, costQty: 0, useWithGrams: 0, grams: 0 };
+  for (const e of S.entries) {
+    if (e.itemId !== itemId) continue;
+    if (sizeId !== undefined && (e.sizeId || '') !== (sizeId || '')) continue;
+    const q = Number(e.qty) || 0;
+    if (e.type === 'in') {
+      r.stockIn += q;
+      if (e.cost !== '' && e.cost != null && !isNaN(e.cost)) { r.cost += Number(e.cost); r.costQty += q; }
+    } else {
+      r.used += q;
+      if (e.date >= wk) r.week += q;
+      if (e.date >= mo) r.month += q;
+      if (Number(e.grams) > 0) { r.useWithGrams += q; r.grams += Number(e.grams); }
+    }
+  }
+  r.stock = r.stockIn - r.used;
+  r.avgCost = r.costQty > 0 ? r.cost / r.costQty : null;
+  r.perGram = r.grams > 0 ? r.useWithGrams / r.grams : null;
+  return r;
+}
+
+// ---------- views ----------
+let view = 'dash';
+let form = null; // {type,itemId,sizeId,editId}
+let histFilter = { item: '', type: '' };
+function go(v) { view = v; document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); render(); window.scrollTo(0, 0); }
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => { if (b.dataset.v === 'add') form = null; go(b.dataset.v); });
+
+function render() {
+  const app = $('#app');
+  if (view === 'dash') app.innerHTML = dashHTML();
+  else if (view === 'add') { app.innerHTML = addHTML(); bindAdd(); }
+  else if (view === 'hist') { app.innerHTML = histHTML(); }
+  else if (view === 'set') { app.innerHTML = setHTML(); }
+}
+
+function dashHTML() {
+  let h = '';
+  const anyLow = [];
+  for (const it of S.items) {
+    const tot = stats(it.id);
+    if (hasSizes(it)) {
+      const sizes = it.sizes.filter(s => !s.archived || stats(it.id, s.id).stock !== 0);
+      let rows = '';
+      for (const s of sizes) {
+        const st = stats(it.id, s.id);
+        const low = isLow(st, s.threshold);
+        if (low) anyLow.push(`${it.name} ${s.name}`);
+        rows += `<tr class="${low ? 'low' : ''}" ${st.stockIn === 0 ? 'style="color:#98a2b3"' : ''}><td>${esc(s.name)}${low ? ' ⚠️' : ''}</td><td>${fmtQ(st.stock, it)}</td><td>${fmtQ(st.week, it)}</td><td>${fmtQ(st.month, it)}</td><td>${st.avgCost != null ? peso(st.avgCost) : '–'}</td></tr>`;
+      }
+      const lowSizes = sizes.filter(s => isLow(stats(it.id, s.id), s.threshold)); const lowCount = lowSizes.length;
+      const totLow = isLow(tot, it.threshold);
+      if (totLow) anyLow.push(`${it.name} (total)`);
+      h += `<div class="card"><h2>${esc(it.name)} <span class="badge ${lowCount || totLow ? 'low' : ''}">${lowCount ? lowCount + ' size' + (lowCount > 1 ? 's' : '') + ' low' : totLow ? 'Low' : 'OK'}</span></h2>
+      <div class="big">${fmtQ(tot.stock, it)} <span class="unit">${esc(it.unit)} on hand (all sizes)</span></div>
+      <table><thead><tr><th>Size</th><th>Stock</th><th>Week</th><th>Month</th><th>Avg cost</th></tr></thead><tbody>${rows}
+      <tr class="total"><td>Total</td><td>${fmtQ(tot.stock, it)}</td><td>${fmtQ(tot.week, it)}</td><td>${fmtQ(tot.month, it)}</td><td>${tot.avgCost != null ? peso(tot.avgCost) : '–'}</td></tr></tbody></table>
+      ${tot.perGram != null ? `<div class="muted" style="margin-top:6px">Usage: ≈ ${(tot.grams / tot.useWithGrams).toLocaleString('en-GB', { maximumFractionDigits: 1 })} g of gold refined per ${esc(singular(it.unit))} (${fmtQ(tot.perGram, { decimals: true })} ${esc(it.unit)}/g)</div>` : ''}
+      ${lowCount ? `<div class="warn">⚠️ Low stock: ${lowSizes.map(s => esc(s.name)).join(', ')}</div>` : ''}
+      ${totLow ? `<div class="warn">⚠️ Total ${esc(it.name.toLowerCase())} at or below ${fmtQ(it.threshold, it)} ${esc(it.unit)}</div>` : ''}
+      <div class="muted" style="margin-top:6px">Grey = never stocked (no warning) · Week = since Monday · Month = since 1st · Avg cost per ${esc(singular(it.unit))}</div></div>`;
+    } else {
+      const low = isLow(tot, it.threshold);
+      if (low) anyLow.push(it.name);
+      h += `<div class="card"><h2>${esc(it.name)} <span class="badge ${low ? 'low' : ''}">${low ? 'Low' : tot.stockIn ? 'OK' : 'No stock yet'}</span></h2>
+      <div class="big">${fmtQ(tot.stock, it)} <span class="unit">${esc(it.unit)} on hand</span></div>
+      <div class="grid">
+        <div class="stat"><small>Used this week</small><b>${fmtQ(tot.week, it)} ${esc(it.unit)}</b></div>
+        <div class="stat"><small>Used this month</small><b>${fmtQ(tot.month, it)} ${esc(it.unit)}</b></div>
+        <div class="stat"><small>Avg cost / ${esc(singular(it.unit))}</small><b>${tot.avgCost != null ? peso(tot.avgCost) : '–'}</b></div>
+        <div class="stat"><small>Per gram of gold</small><b>${tot.perGram != null ? fmtQ(tot.perGram, { decimals: true }) + ' ' + esc(it.unit) : '–'}</b></div>
+      </div>
+      ${low ? `<div class="warn">⚠️ Low stock — at or below ${fmtQ(it.threshold, it)} ${esc(it.unit)}. Time to reorder.</div>` : ''}</div>`;
+    }
+  }
+  const banner = anyLow.length ? `<div class="warn" style="margin:0 0 12px">⚠️ ${anyLow.length} low: ${anyLow.map(esc).join(', ')}</div>` : '';
+  const empty = S.entries.length === 0 ? `<div class="card empty">No entries yet.<br>Tap <b>Add</b> to log a purchase (stock in) or usage.</div>` : '';
+  return banner + empty + h + `<div class="row2"><button class="btn gold" onclick="startAdd('in')">＋ Stock in</button><button class="btn" onclick="startAdd('use')">− Use</button></div>`;
+}
+function isLow(st, th) { return Number(th) > 0 && st.stockIn > 0 && st.stock <= Number(th); }
+function singular(u) { u = String(u || ''); if (u === 'pcs') return 'pc'; return u.endsWith('s') ? u.slice(0, -1) : u; }
+function startAdd(type) { form = { type }; go('add'); }
+
+function addHTML() {
+  const f = form || (form = { type: 'use' });
+  const e = f.editId ? S.entries.find(x => x.id === f.editId) : null;
+  if (e && !f.loaded) Object.assign(f, { type: e.type, itemId: e.itemId, sizeId: e.sizeId, loaded: true });
+  if (!f.itemId || !item(f.itemId)) f.itemId = S.items[0] && S.items[0].id;
+  const it = item(f.itemId);
+  if (!it) return `<div class="card empty">Add an item in Settings first.</div>`;
+  const sizes = hasSizes(it) ? it.sizes.filter(s => !s.archived || s.id === f.sizeId) : [];
+  if (hasSizes(it) && f.sizeId && !size(it, f.sizeId)) f.sizeId = null;
+  const v = e || {};
+  return `<div class="card">
+  <h2>${e ? 'Edit entry' : 'New entry'}</h2>
+  <div class="seg"><button class="${f.type === 'in' ? 'on in' : ''}" data-t="in">＋ Stock in</button><button class="${f.type === 'use' ? 'on use' : ''}" data-t="use">− Use</button></div>
+  <label>Item</label>
+  <div class="chips" id="itemChips">${S.items.map(i => `<button class="chip ${i.id === f.itemId ? 'on' : ''}" data-i="${i.id}">${esc(i.name)}</button>`).join('')}</div>
+  ${hasSizes(it) ? `<label>Size <span style="color:var(--red)">*</span></label><div class="chips" id="sizeChips">${sizes.map(s => `<button class="chip ${s.id === f.sizeId ? 'on' : ''}" data-s="${s.id}">${esc(s.name)}</button>`).join('')}</div>` : ''}
+  <div class="row2">
+    <div><label>Quantity (${esc(it.unit)})</label><input id="qty" type="number" inputmode="${it.decimals ? 'decimal' : 'numeric'}" step="${it.decimals ? 'any' : '1'}" min="0" value="${esc(v.qty ?? '')}" placeholder="0"></div>
+    <div><label>Date</label><input id="date" type="date" value="${esc(v.date || todayISO())}"></div>
+  </div>
+  ${f.type === 'in' ? `
+  <label>Total cost ₱ (optional)</label><input id="cost" type="number" inputmode="decimal" step="any" min="0" value="${esc(v.cost ?? '')}" placeholder="e.g. 2500">
+  <label>Supplier / note (optional)</label><input id="note" type="text" value="${esc(v.note || '')}" placeholder="Supplier name, receipt no.">` : `
+  <label>Batch / lot label (optional)</label><input id="batch" type="text" value="${esc(v.batch || '')}" placeholder="e.g. B-102">
+  <label>Gold refined, grams (optional)</label><input id="grams" type="number" inputmode="decimal" step="any" min="0" value="${esc(v.grams ?? '')}" placeholder="for usage per gram">
+  <label>Note (optional)</label><input id="note" type="text" value="${esc(v.note || '')}">`}
+  <button class="btn ${f.type === 'in' ? 'gold' : ''}" id="saveBtn">${e ? 'Save changes' : f.type === 'in' ? 'Save stock in' : 'Save usage'}</button>
+  ${e ? `<button class="btn light" onclick="form=null;go('hist')">Cancel</button>` : ''}
+  </div>`;
+}
+function keepInputs() { // preserve typed values when re-rendering for chip changes
+  const o = {}; ['qty', 'date', 'cost', 'note', 'batch', 'grams'].forEach(k => { const el = document.getElementById(k); if (el) o[k] = el.value; }); return o;
+}
+function restoreInputs(o) { for (const k in o) { const el = document.getElementById(k); if (el) el.value = o[k]; } }
+function bindAdd() {
+  document.querySelectorAll('.seg button').forEach(b => b.onclick = () => { const o = keepInputs(); form.type = b.dataset.t; render(); restoreInputs(o); });
+  document.querySelectorAll('#itemChips .chip').forEach(b => b.onclick = () => { const o = keepInputs(); form.itemId = b.dataset.i; form.sizeId = null; render(); restoreInputs(o); });
+  document.querySelectorAll('#sizeChips .chip').forEach(b => b.onclick = () => { const o = keepInputs(); form.sizeId = b.dataset.s; render(); restoreInputs(o); });
+  const sb = $('#saveBtn'); if (sb) sb.onclick = saveEntry;
+}
+function saveEntry() {
+  const it = item(form.itemId);
+  const qty = parseFloat($('#qty').value);
+  if (!(qty > 0)) return toast('Enter a quantity above 0');
+  if (!it.decimals && !Number.isInteger(qty)) return toast(`${it.name} must be a whole number`);
+  if (hasSizes(it) && !form.sizeId) return toast('Pick a size');
+  const date = $('#date').value || todayISO();
+  const g = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  const e = { type: form.type, itemId: it.id, sizeId: hasSizes(it) ? form.sizeId : null, qty, date, note: g('note') };
+  if (form.type === 'in') { const c = g('cost'); e.cost = c === '' ? null : parseFloat(c); }
+  else { e.batch = g('batch'); const gr = g('grams'); e.grams = gr === '' ? null : parseFloat(gr); }
+  if (form.type === 'use') {
+    const st = stats(it.id, hasSizes(it) ? form.sizeId : undefined);
+    const prev = form.editId ? S.entries.find(x => x.id === form.editId) : null;
+    const avail = st.stock + (prev && prev.type === 'use' && prev.itemId === it.id && (prev.sizeId || null) === (e.sizeId || null) ? Number(prev.qty) : 0);
+    if (qty > avail + 1e-9 && !confirm(`This is more than the ${fmtQ(avail, it)} ${it.unit} on hand. Save anyway?`)) return;
+  }
+  if (form.editId) { const i = S.entries.findIndex(x => x.id === form.editId); e.id = form.editId; e.created = S.entries[i].created; S.entries[i] = e; }
+  else { e.id = uid(); e.created = Date.now(); S.entries.push(e); }
+  save();
+  const wasEdit = !!form.editId;
+  form = null; toast(wasEdit ? 'Entry updated' : 'Saved ✓'); go(wasEdit ? 'hist' : 'dash');
+}
+
+function entryLabel(e) {
+  const it = item(e.itemId); const s = size(it, e.sizeId);
+  return `${it ? esc(it.name) : '(deleted item)'}${s ? ' ' + esc(s.name) : ''}`;
+}
+function histHTML() {
+  const list = S.entries.filter(e => (!histFilter.item || e.itemId === histFilter.item) && (!histFilter.type || e.type === histFilter.type))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || (b.created || 0) - (a.created || 0));
+  const rows = list.map(e => {
+    const it = item(e.itemId);
+    const extra = e.type === 'in'
+      ? [e.cost != null && e.cost !== '' ? peso(e.cost) + (e.qty ? ` (${peso(e.cost / e.qty)}/${singular(it ? it.unit : '')})` : '') : '', e.note ? esc(e.note) : ''].filter(Boolean).join(' · ')
+      : [e.batch ? 'Batch ' + esc(e.batch) : '', e.grams ? esc(e.grams) + ' g gold' : '', e.note ? esc(e.note) : ''].filter(Boolean).join(' · ');
+    return `<div class="hist"><span class="tag ${e.type}">${e.type === 'in' ? 'IN' : 'USE'}</span>
+      <div class="body"><b>${e.type === 'in' ? '+' : '−'}${fmtQ(e.qty, it)} ${it ? esc(it.unit) : ''}</b> ${entryLabel(e)}<br><span class="muted">${fmtDate(e.date)}${extra ? ' · ' + extra : ''}</span></div>
+      <div class="acts"><button aria-label="Edit" onclick="editEntry('${e.id}')">✏️</button><button aria-label="Delete" onclick="delEntry('${e.id}')">🗑️</button></div></div>`;
+  }).join('');
+  return `<div class="card"><div class="filters">
+    <select onchange="histFilter.item=this.value;render()"><option value="">All items</option>${S.items.map(i => `<option value="${i.id}" ${histFilter.item === i.id ? 'selected' : ''}>${esc(i.name)}</option>`).join('')}</select>
+    <select onchange="histFilter.type=this.value;render()"><option value="">In & use</option><option value="in" ${histFilter.type === 'in' ? 'selected' : ''}>Stock in</option><option value="use" ${histFilter.type === 'use' ? 'selected' : ''}>Use</option></select></div></div>
+  <div class="card">${rows || '<div class="empty">No entries.</div>'}</div>
+  <button class="btn light" onclick="exportCSV()">⬇️ Export CSV</button>`;
+}
+function editEntry(id) { form = { editId: id }; go('add'); }
+function delEntry(id) {
+  const e = S.entries.find(x => x.id === id); if (!e) return;
+  if (!confirm(`Delete this entry?\n${e.type === 'in' ? 'Stock in' : 'Use'}: ${fmtQ(e.qty, item(e.itemId))} ${entryLabel(e).replace(/&amp;/g, '&')} on ${fmtDate(e.date)}`)) return;
+  S.entries = S.entries.filter(x => x.id !== id); save(); render(); toast('Deleted');
+}
+
+// ---------- settings ----------
+function setHTML() {
+  const items = S.items.map(it => `<div class="setitem">
+    <label>Item name</label><input value="${esc(it.name)}" onchange="updItem('${it.id}','name',this.value)">
+    <div class="row2">
+      <div><label>Unit</label><input value="${esc(it.unit)}" onchange="updItem('${it.id}','unit',this.value)"></div>
+      <div><label>Decimals?</label><select onchange="updItem('${it.id}','decimals',this.value==='1')"><option value="1" ${it.decimals ? 'selected' : ''}>Yes (e.g. 1.5)</option><option value="0" ${!it.decimals ? 'selected' : ''}>Whole numbers</option></select></div>
+    </div>
+    <label>Low-stock warning at ${hasSizes(it) ? '(total, all sizes — 0 = off)' : '(0 = off)'}</label><input type="number" inputmode="decimal" step="any" min="0" value="${esc(it.threshold || 0)}" onchange="updItem('${it.id}','threshold',parseFloat(this.value)||0)">
+    ${hasSizes(it) ? `<label>Size tags · low-stock warning per size</label>
+      ${it.sizes.map(s => `<div class="sizerow"><input value="${esc(s.name)}" onchange="updSize('${it.id}','${s.id}','name',this.value)" ${s.archived ? 'style="opacity:.5"' : ''}><input type="number" inputmode="decimal" min="0" step="any" value="${esc(s.threshold || 0)}" title="Low-stock threshold" onchange="updSize('${it.id}','${s.id}','threshold',parseFloat(this.value)||0)"><button class="iconbtn" aria-label="Remove size" onclick="delSize('${it.id}','${s.id}')">${s.archived ? '↩︎' : '✕'}</button></div>`).join('')}
+      <div class="muted" style="margin-top:4px">Name · warn at · remove</div>` : ''}
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button class="btn sm light" onclick="addSize('${it.id}')">＋ Add size tag</button>
+      <button class="btn sm danger" onclick="delItem('${it.id}')">Delete item</button>
+    </div></div>`).join('');
+  return `<div class="card"><h2>Items & units</h2>${items}<button class="btn light" onclick="addItem()">＋ Add item</button></div>
+  <div class="card"><h2>Backup & export</h2>
+    <div class="muted">Your data is stored only on this phone. Export a backup regularly.</div>
+    <button class="btn light" onclick="exportCSV()">⬇️ Export CSV (spreadsheet)</button>
+    <button class="btn light" onclick="exportJSON()">💾 Backup (JSON)</button>
+    <button class="btn light" onclick="$('#restoreFile').click()">♻️ Restore from backup</button>
+    <button class="btn danger" onclick="wipe()">Erase all data</button>
+  </div>
+  <div class="muted" style="text-align:center;padding:8px">${S.entries.length} entries · works offline</div>`;
+}
+function updItem(id, k, v) { const it = item(id); if (k === 'name' || k === 'unit') { v = String(v).trim(); if (!v) return render(); } it[k] = v; save(); toast('Saved'); render(); }
+function updSize(iid, sid, k, v) { const s = size(item(iid), sid); if (k === 'name') { v = String(v).trim(); if (!v) return render(); } s[k] = v; save(); toast('Saved'); }
+function addSize(iid) {
+  const it = item(iid); const n = prompt('New size tag name (e.g. #6):'); if (!n || !n.trim()) return;
+  it.sizes = it.sizes || []; it.sizes.push({ id: uid(), name: n.trim(), threshold: 0, archived: false });
+  if (it.sizes.length === 1 && S.entries.some(e => e.itemId === iid)) toast('Existing entries for this item have no size — edit them in History');
+  save(); render();
+}
+function delSize(iid, sid) {
+  const it = item(iid); const s = size(it, sid);
+  if (s.archived) { s.archived = false; save(); render(); return toast('Size restored'); }
+  const used = S.entries.filter(e => e.itemId === iid && e.sizeId === sid).length;
+  if (used) {
+    if (!confirm(`"${s.name}" has ${used} entries. Hide it from the size picker? (History is kept; tap ↩︎ to restore.)`)) return;
+    s.archived = true;
+  } else {
+    if (!confirm(`Remove size "${s.name}"?`)) return;
+    it.sizes = it.sizes.filter(x => x.id !== sid);
+  }
+  save(); render();
+}
+function addItem() {
+  const n = prompt('Item name (e.g. Borax, Hydrochloric acid):'); if (!n || !n.trim()) return;
+  const u = prompt('Unit (e.g. kg, litres, gallons, pcs):', 'pcs'); if (!u || !u.trim()) return;
+  const dec = confirm('Allow decimal quantities (e.g. 1.5)? OK = yes, Cancel = whole numbers only');
+  S.items.push({ id: uid(), name: n.trim(), unit: u.trim(), decimals: dec, threshold: 0, sizes: [] }); save(); render(); toast('Item added');
+}
+function delItem(id) {
+  const it = item(id); const used = S.entries.filter(e => e.itemId === id).length;
+  if (!confirm(`Delete "${it.name}"${used ? ` and its ${used} entries` : ''}? This cannot be undone.`)) return;
+  S.items = S.items.filter(i => i.id !== id); S.entries = S.entries.filter(e => e.itemId !== id); save(); render();
+}
+function wipe() { if (!confirm('Erase ALL items and entries from this phone? Make a backup first.')) return; if (!confirm('Really erase everything?')) return; S = defaultState(); save(); render(); toast('All data erased'); }
+
+// ---------- export / backup ----------
+function stamp() { return todayISO(); }
+async function deliver(name, text, mime) {
+  const blob = new Blob([text], { type: mime });
+  try {
+    const file = new File([blob], name, { type: mime });
+    if (navigator.canShare && navigator.canShare({ files: [file] }) && /Android|iPhone|iPad/i.test(navigator.userAgent)) { await navigator.share({ files: [file], title: name }); return; }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+function csvCell(v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+function exportCSV() {
+  const head = ['Date', 'Type', 'Item', 'Size', 'Quantity', 'Unit', 'Cost (PHP)', 'Cost per unit (PHP)', 'Batch', 'Gold refined (g)', 'Note'];
+  const rows = S.entries.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(e => {
+    const it = item(e.itemId); const s = size(it, e.sizeId);
+    return [fmtDateNum(e.date), e.type === 'in' ? 'Stock in' : 'Use', it ? it.name : '', s ? s.name : '', e.qty, it ? it.unit : '',
+      e.type === 'in' && e.cost != null ? Number(e.cost).toFixed(2) : '', e.type === 'in' && e.cost != null && e.qty ? (e.cost / e.qty).toFixed(2) : '',
+      e.batch || '', e.grams ?? '', e.note || ''];
+  });
+  const csv = '\ufeff' + [head, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n');
+  deliver(`consumables-${stamp()}.csv`, csv, 'text/csv');
+}
+function exportJSON() { deliver(`consumables-backup-${stamp()}.json`, JSON.stringify({ app: 'refining-consumables', exported: new Date().toISOString(), ...S }, null, 2), 'application/json'); }
+$('#restoreFile').onchange = async ev => {
+  const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    if (!Array.isArray(d.items) || !Array.isArray(d.entries)) throw new Error('bad');
+    if (!confirm(`Restore backup with ${d.items.length} items and ${d.entries.length} entries? This replaces the data on this phone.`)) return;
+    S = { version: 1, items: d.items, entries: d.entries }; save(); render(); toast('Backup restored');
+  } catch (e) { alert('That file is not a valid backup.'); }
+};
+
+render();
+if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
