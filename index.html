@@ -83,6 +83,17 @@ table.sz th,table.sz td{padding:7px 3px}
 .batch b{white-space:nowrap}
 .sizerow.p{grid-template-columns:1fr 70px 84px 44px}
 .filters select{min-height:46px;padding:8px}
+.btn.paid{background:var(--green);color:#fff}
+.modal{position:fixed;inset:0;background:rgba(10,16,30,.55);z-index:30;display:flex;align-items:flex-end;justify-content:center}
+.modal .sheet{background:#fff;border-radius:18px 18px 0 0;width:100%;max-width:640px;max-height:92vh;overflow:auto;padding:16px 16px calc(16px + env(safe-area-inset-bottom))}
+.modal h2{margin:0 0 6px;font-size:19px}
+.chk{display:flex;gap:10px;align-items:flex-start;font-weight:500;font-size:15px;margin-top:12px}
+.chk input{width:24px;min-height:24px;height:24px;flex:none;margin:0}
+.period{border-bottom:1px solid var(--line);padding:10px 0;font-size:15px}
+.period:last-child{border-bottom:0}
+.period .top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.period .del{border:0;background:var(--redbg);color:var(--red);border-radius:10px;min-width:44px;min-height:40px;font-size:16px}
+.curlist{border-left:5px solid var(--green)}
 </style>
 </head>
 <body>
@@ -112,6 +123,7 @@ function defaultState() {
         sizes: DEFAULT_SIZES.map(n => ({ id: DEFAULT_SIZE_IDS[n], name: n, threshold: 2, archived: false, price: DEFAULT_PRICES[n] })) }
     ],
     entries: [],
+    paid: [],
     mig: { prices: true, medium: true, stampUse: true, container: true }
   };
 }
@@ -147,6 +159,7 @@ function migrate(st) {
     if (ni && ni.packSize == null) { ni.packSize = 7; ni.packName = ni.packName || 'containers'; }
     st.mig.container = true;
   }
+  if (!Array.isArray(st.paid)) st.paid = [];
   st.version = 2;
   return st;
 }
@@ -274,7 +287,7 @@ function dashHTML() {
   }
   const banner = anyLow.length ? `<div class="warn" style="margin:0 0 12px">⚠️ ${anyLow.length} low: ${anyLow.map(esc).join(', ')}</div>` : '';
   const empty = S.entries.length === 0 ? `<div class="card empty">No entries yet.<br>Tap <b>Add</b> to log a purchase (stock in) or usage.</div>` : '';
-  return banner + empty + h + `<div class="row2"><button class="btn gold" onclick="startAdd('in')">＋ Stock in</button><button class="btn" onclick="startAdd('use')">− Use</button></div>`;
+  return banner + empty + curListHTML() + h + `<div class="row2"><button class="btn gold" onclick="startAdd('in')">＋ Stock in</button><button class="btn" onclick="startAdd('use')">− Use</button></div>`;
 }
 function isLow(st, th) { return Number(th) > 0 && st.stockIn > 0 && st.stock <= Number(th); }
 function singular(u) { u = String(u || ''); if (u === 'pcs') return 'pc'; return u.endsWith('s') ? u.slice(0, -1) : u; }
@@ -391,7 +404,9 @@ function histHTML() {
     <select onchange="histFilter.type=this.value;render()"><option value="">In & use</option><option value="in" ${histFilter.type === 'in' ? 'selected' : ''}>Stock in</option><option value="use" ${histFilter.type === 'use' ? 'selected' : ''}>Use</option></select></div></div>
   ${batchCostHTML()}
   <div class="card">${rows || '<div class="empty">No entries.</div>'}</div>
-  <button class="btn light" onclick="exportCSV()">⬇️ Export CSV</button>`;
+  <button class="btn light" onclick="exportCSV()">⬇️ Export CSV</button>
+  ${S.entries.length ? `<button class="btn paid" onclick="openPaid()">✅ Paid – start new list</button>` : ''}
+  ${paidListHTML()}`;
 }
 function batchCostHTML() { // crucible (priced) cost per batch, grouped by date + batch label
   const g = new Map();
@@ -443,6 +458,11 @@ function setHTML() {
     <button class="btn light" onclick="$('#restoreFile').click()">♻️ Restore from backup</button>
     <button class="btn danger" onclick="wipe()">Erase all data</button>
   </div>
+  <div class="card"><h2>Paid – start new list</h2>
+    <div class="muted">When you've paid for everything on the current list, this saves a summary to <b>Paid periods</b> and clears the entries. Items, sizes, prices, warnings and container settings stay.</div>
+    <button class="btn paid" onclick="openPaid()" ${S.entries.length ? '' : 'disabled style="opacity:.5"'}>✅ Paid – start new list</button>
+  </div>
+  ${paidListHTML()}
   <div class="muted" style="text-align:center;padding:8px">${S.entries.length} entries · works offline</div>`;
 }
 function updItem(id, k, v) { const it = item(id); if (k === 'name' || k === 'unit' || k === 'packName') { v = String(v).trim(); if (!v) return render(); } it[k] = v; save(); toast('Saved'); render(); }
@@ -479,6 +499,108 @@ function delItem(id) {
 }
 function wipe() { if (!confirm('Erase ALL items and entries from this phone? Make a backup first.')) return; if (!confirm('Really erase everything?')) return; S = defaultState(); save(); render(); toast('All data erased'); }
 
+// ---------- paid periods ----------
+function periodSummary() { // totals for the current list of entries
+  const ents = S.entries; const dates = ents.map(e => e.date).filter(Boolean).sort();
+  const out = { from: dates[0] || '', to: dates[dates.length - 1] || '', count: ents.length, items: [], total: 0 };
+  for (const it of S.items) {
+    const mine = ents.filter(e => e.itemId === it.id); if (!mine.length) continue;
+    const r = { name: it.name, unit: it.unit, decimals: !!it.decimals, used: 0, cost: 0, priced: false };
+    if (hasSizes(it)) {
+      r.sizes = [];
+      for (const z of it.sizes) {
+        const us = mine.filter(e => e.type === 'use' && e.sizeId === z.id); if (!us.length) continue;
+        let q = 0, c = 0, pr = false; for (const e of us) { q += Number(e.qty) || 0; const ec = entryCost(e); if (ec != null) { c += ec; pr = true; } }
+        r.sizes.push({ name: z.name, qty: q, cost: Math.round(c * 100) / 100, priced: pr }); r.used += q; r.cost += c; if (pr) r.priced = true;
+      }
+      r.costNote = 'used × price';
+    } else {
+      for (const e of mine) {
+        if (e.type === 'use') r.used += Number(e.qty) || 0;
+        else if (e.cost != null && e.cost !== '' && !isNaN(e.cost)) { r.cost += Number(e.cost); r.priced = true; }
+      }
+      if (packOf(it)) { r.packSize = packOf(it); r.packName = it.packName || 'containers'; }
+      r.costNote = 'purchases logged';
+    }
+    r.used = Math.round(r.used * 1000) / 1000; r.cost = Math.round(r.cost * 100) / 100; out.total += r.cost;
+    out.items.push(r);
+  }
+  out.total = Math.round(out.total * 100) / 100;
+  return out;
+}
+function rangeTxt(a, b) { return a ? (a === b ? fmtDate(a) : `${fmtDate(a)} – ${fmtDate(b)}`) : '(no dates)'; }
+function packsOf(q, ps) { return Math.round((Number(q) || 0) / ps * 10) / 10; }
+function summaryHTML(p) {
+  return p.items.map(r => {
+    const iu = { decimals: r.decimals };
+    if (r.sizes) return `<table class="sz"><thead><tr><th>${esc(r.name)}</th><th>Used</th><th>Cost</th></tr></thead><tbody>
+      ${r.sizes.map(z => `<tr><td>${esc(z.name)}</td><td>${fmtQ(z.qty, iu)}</td><td>${z.priced ? pesoS(z.cost) : '–'}</td></tr>`).join('')}
+      <tr class="total"><td>Total</td><td>${fmtQ(r.used, iu)} ${esc(r.unit)}</td><td>${r.priced ? pesoS(r.cost) : '–'}</td></tr></tbody></table>`;
+    return `<div class="batch"><div><b>${esc(r.name)}</b><br><span class="muted">${fmtQ(r.used, iu)} ${esc(r.unit)} used${r.packSize ? ` ≈ ${packsOf(r.used, r.packSize).toLocaleString('en-GB', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${esc(r.packName)}` : ''}${r.priced ? ' · ' + esc(r.costNote) : ''}</span></div><b>${r.priced ? pesoS(r.cost) : '–'}</b></div>`;
+  }).join('') + `<div class="batch" style="font-size:17px"><b>Overall total</b><b>${pesoS(p.total)}</b></div>`;
+}
+function curListHTML() {
+  if (!S.entries.length) return '';
+  const p = periodSummary();
+  return `<div class="card curlist"><h2>Current list <span class="muted">${p.count} entries</span></h2>
+    <div class="muted">${rangeTxt(p.from, p.to)}</div>
+    <div class="big" style="margin-top:4px">${pesoS(p.total)} <span class="unit">to pay</span></div>
+    <button class="btn paid" onclick="openPaid()">✅ Paid – start new list</button></div>`;
+}
+function carryList() { // positive on-hand stock that can be carried into the new list
+  const out = [];
+  for (const it of S.items) {
+    if (hasSizes(it)) { for (const z of it.sizes) { const st = stats(it.id, z.id); if (st.stock > 1e-9) out.push({ it, z, q: st.stock }); } }
+    else { const st = stats(it.id); if (st.stock > 1e-9) out.push({ it, z: null, q: st.stock }); }
+  }
+  return out;
+}
+let paidCSVDone = false;
+function openPaid() {
+  if (!S.entries.length) return toast('No entries to clear');
+  closePaid(); paidCSVDone = false;
+  const p = periodSummary(); const carry = carryList();
+  const m = document.createElement('div'); m.className = 'modal'; m.id = 'paidModal';
+  m.innerHTML = `<div class="sheet" role="dialog" aria-label="Paid – start new list">
+    <h2>✅ Paid – start new list?</h2>
+    <div class="muted">${rangeTxt(p.from, p.to)} · ${p.count} entries</div>
+    ${summaryHTML(p)}
+    <button class="btn light" id="paidCSV">⬇️ Save CSV of these entries (optional)</button>
+    ${carry.length ? `<label class="chk"><input type="checkbox" id="paidCarry" checked><span>Keep stock on hand in the new list (${carry.map(c => `${fmtQ(c.q, c.it)} ${esc(c.z ? c.z.name : c.it.unit)}`).join(', ')})</span></label>` : ''}
+    <div class="muted" style="margin-top:10px">This saves the totals above to <b>Paid periods</b> and clears all ${p.count} entries. Items, sizes, prices, warnings and container settings are kept.</div>
+    <button class="btn paid" id="paidOK">Mark as paid &amp; clear entries</button>
+    <button class="btn light" id="paidCancel">Cancel</button></div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click', ev => { if (ev.target === m) closePaid(); });
+  $('#paidCancel').onclick = closePaid;
+  $('#paidCSV').onclick = async () => { try { await exportCSV(S.entries, `consumables-${p.from || 'start'}_to_${p.to || stamp()}.csv`); paidCSVDone = true; } catch (e) { toast('Could not save the file'); } };
+  $('#paidOK').onclick = () => confirmPaid(p);
+}
+function closePaid() { const m = $('#paidModal'); if (m) m.remove(); }
+function confirmPaid(p) {
+  const cb = $('#paidCarry'); const carry = cb && cb.checked ? carryList() : [];
+  const today = todayISO();
+  S.paid = S.paid || [];
+  S.paid.unshift({ id: uid(), from: p.from, to: p.to, paidOn: today, paidAt: Date.now(), count: p.count, items: p.items, total: p.total });
+  S.entries = carry.map(c => ({ type: 'in', itemId: c.it.id, sizeId: c.z ? c.z.id : null, qty: Math.round(c.q * 1000) / 1000, date: today, note: 'Carried over from previous list', cost: null, id: uid(), created: Date.now() }));
+  save(); closePaid(); render(); toast('Marked as paid ✓ New list started');
+}
+function paidListHTML() {
+  const L = S.paid || [];
+  if (!L.length) return `<div class="card"><h2>Paid periods</h2><div class="muted">None yet. Tap “Paid – start new list” after you pay for a list.</div></div>`;
+  return `<div class="card" id="paidList"><h2>Paid periods <span class="muted">${L.length}</span></h2>
+    ${L.map(a => `<div class="period"><div class="top"><div><b>${rangeTxt(a.from, a.to)}</b><br><span class="muted">Paid ${fmtDate(a.paidOn)} · ${a.count} entries</span></div>
+      <div style="display:flex;gap:8px;align-items:center"><b>${pesoS(a.total)}</b><button class="del" aria-label="Delete paid period" onclick="delPaid('${a.id}')">🗑️</button></div></div>
+      <div class="muted" style="margin-top:4px">${(a.items || []).map(r => r.sizes
+        ? `${esc(r.name)}: ${fmtQ(r.used, { decimals: r.decimals })} ${esc(r.unit)}${r.priced ? ' ' + pesoS(r.cost) : ''} (${r.sizes.map(z => `${fmtQ(z.qty, { decimals: r.decimals })}× ${esc(z.name)}${z.priced ? ' ' + pesoS(z.cost) : ''}`).join(', ')})`
+        : `${esc(r.name)}: ${fmtQ(r.used, { decimals: r.decimals })} ${esc(r.unit)}${r.packSize ? ` ≈ ${packsOf(r.used, r.packSize).toLocaleString('en-GB', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${esc(r.packName)}` : ''}${r.priced ? ' ' + pesoS(r.cost) : ''}`).join('<br>')}</div></div>`).join('')}</div>`;
+}
+function delPaid(id) {
+  const a = (S.paid || []).find(x => x.id === id); if (!a) return;
+  if (!confirm(`Delete the paid period ${rangeTxt(a.from, a.to)} (${pesoS(a.total)}) from the archive?`)) return;
+  S.paid = S.paid.filter(x => x.id !== id); save(); render(); toast('Paid period deleted');
+}
+
 // ---------- export / backup ----------
 function stamp() { return todayISO(); }
 async function deliver(name, text, mime) {
@@ -491,9 +613,9 @@ async function deliver(name, text, mime) {
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
 }
 function csvCell(v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
-function exportCSV() {
+function exportCSV(list, name) {
   const head = ['Date', 'Type', 'Item', 'Size', 'Quantity', 'Unit', 'Cost (PHP)', 'Cost per unit (PHP)', 'Batch', 'Gold refined (g)', 'Note'];
-  const rows = S.entries.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(e => {
+  const rows = (Array.isArray(list) ? list : S.entries).slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(e => {
     const it = item(e.itemId); const s = size(it, e.sizeId);
     return [fmtDateNum(e.date), e.type === 'in' ? 'Stock in' : 'Use', it ? it.name : '', s ? s.name : '', e.qty, it ? it.unit : '',
       e.type === 'in' ? (e.cost != null ? Number(e.cost).toFixed(2) : '') : (entryCost(e) != null ? entryCost(e).toFixed(2) : ''),
@@ -501,13 +623,13 @@ function exportCSV() {
       e.batch || '', e.grams ?? '', e.note || ''];
   });
   const csv = '\ufeff' + [head, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n');
-  deliver(`consumables-${stamp()}.csv`, csv, 'text/csv');
+  return deliver(name || `consumables-${stamp()}.csv`, csv, 'text/csv');
 }
 function exportJSON() { deliver(`consumables-backup-${stamp()}.json`, JSON.stringify({ app: 'refining-consumables', exported: new Date().toISOString(), ...S }, null, 2), 'application/json'); }
 function applyBackup(d) { // shared by file Restore and link import; returns true if data was replaced
   if (!d || !Array.isArray(d.items) || !Array.isArray(d.entries)) throw new Error('bad');
   if (!confirm(`Restore backup with ${d.items.length} items and ${d.entries.length} entries? This replaces the data on this phone.`)) return false;
-  S = migrate({ version: d.version || 1, items: d.items, entries: d.entries, mig: d.mig || {} }); save(); render(); toast('Backup restored');
+  S = migrate({ version: d.version || 1, items: d.items, entries: d.entries, paid: Array.isArray(d.paid) ? d.paid : (S.paid || []), mig: d.mig || {} }); save(); render(); toast('Backup restored');
   return true;
 }
 $('#restoreFile').onchange = async ev => {
