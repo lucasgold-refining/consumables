@@ -393,17 +393,34 @@ function exportCSV() {
   deliver(`consumables-${stamp()}.csv`, csv, 'text/csv');
 }
 function exportJSON() { deliver(`consumables-backup-${stamp()}.json`, JSON.stringify({ app: 'refining-consumables', exported: new Date().toISOString(), ...S }, null, 2), 'application/json'); }
+function applyBackup(d) { // shared by file Restore and link import; returns true if data was replaced
+  if (!d || !Array.isArray(d.items) || !Array.isArray(d.entries)) throw new Error('bad');
+  if (!confirm(`Restore backup with ${d.items.length} items and ${d.entries.length} entries? This replaces the data on this phone.`)) return false;
+  S = { version: 1, items: d.items, entries: d.entries }; save(); render(); toast('Backup restored');
+  return true;
+}
 $('#restoreFile').onchange = async ev => {
   const f = ev.target.files[0]; ev.target.value = ''; if (!f) return;
-  try {
-    const d = JSON.parse(await f.text());
-    if (!Array.isArray(d.items) || !Array.isArray(d.entries)) throw new Error('bad');
-    if (!confirm(`Restore backup with ${d.items.length} items and ${d.entries.length} entries? This replaces the data on this phone.`)) return;
-    S = { version: 1, items: d.items, entries: d.entries }; save(); render(); toast('Backup restored');
-  } catch (e) { alert('That file is not a valid backup.'); }
+  try { applyBackup(JSON.parse(await f.text())); } catch (e) { alert('That file is not a valid backup.'); }
 };
+// Import from a link: index.html#import=data/some-file.json (same-origin .json under data/ only)
+async function importFromHash() {
+  const m = location.hash.match(/^#import=(.+)$/); if (!m) return;
+  history.replaceState(null, '', location.pathname + location.search); // clear hash so it never re-runs
+  let path; try { path = decodeURIComponent(m[1]); } catch (e) { return; }
+  const url = new URL(path, location.href);
+  if (url.origin !== location.origin || !/\/data\/[^/]+\.json$/.test(url.pathname)) return alert('That import link is not valid.');
+  url.searchParams.set('t', Date.now()); // bypass service worker / HTTP caches
+  try {
+    const r = await fetch(url.href, { cache: 'no-store' });
+    if (!r.ok) throw new Error('http ' + r.status);
+    applyBackup(await r.json());
+  } catch (e) { alert('Could not load the import file. Check your internet connection and open the link again.'); }
+}
 
 render();
+importFromHash();
+window.addEventListener('hashchange', importFromHash);
 if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 </script>
 </body>
