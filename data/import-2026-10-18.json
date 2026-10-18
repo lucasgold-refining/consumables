@@ -1,0 +1,464 @@
+{
+  "app": "refining-consumables",
+  "exported": "2026-10-18T01:20:00.000Z",
+  "version": 1,
+  "items": [
+    {
+      "id": "nitric",
+      "name": "Nitric acid",
+      "unit": "gallons",
+      "decimals": true,
+      "threshold": 2,
+      "sizes": []
+    },
+    {
+      "id": "crucible",
+      "name": "Crucibles",
+      "unit": "pcs",
+      "decimals": false,
+      "threshold": 0,
+      "sizes": [
+        {
+          "id": "s1",
+          "name": "#1",
+          "threshold": 2,
+          "archived": false
+        },
+        {
+          "id": "s2",
+          "name": "#2",
+          "threshold": 2,
+          "archived": false
+        },
+        {
+          "id": "s3",
+          "name": "#3",
+          "threshold": 2,
+          "archived": false
+        },
+        {
+          "id": "s4",
+          "name": "#4",
+          "threshold": 2,
+          "archived": false
+        },
+        {
+          "id": "s5",
+          "name": "#5",
+          "threshold": 2,
+          "archived": false
+        },
+        {
+          "id": "s6",
+          "name": "Jumbo",
+          "threshold": 2,
+          "archived": false
+        },
+        {
+          "id": "s7",
+          "name": "XL",
+          "threshold": 2,
+          "archived": false
+        }
+      ]
+    }
+  ],
+  "entries": [
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s2",
+      "qty": 1,
+      "date": "2026-09-22",
+      "note": "",
+      "batch": "9/22",
+      "grams": null,
+      "id": "imp202609220",
+      "created": 1790049600000
+    },
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s5",
+      "qty": 1,
+      "date": "2026-09-22",
+      "note": "",
+      "batch": "9/22",
+      "grams": null,
+      "id": "imp202609221",
+      "created": 1790049600001
+    },
+    {
+      "type": "use",
+      "itemId": "nitric",
+      "sizeId": null,
+      "qty": 3.75,
+      "date": "2026-09-22",
+      "note": "",
+      "batch": "9/22",
+      "grams": null,
+      "id": "imp202609222",
+      "created": 1790049600002
+    },
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s2",
+      "qty": 1,
+      "date": "2026-09-24",
+      "note": "",
+      "batch": "9/24",
+      "grams": null,
+      "id": "imp202609240",
+      "created": 1790222400000
+    },
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s4",
+      "qty": 1,
+      "date": "2026-09-24",
+      "note": "",
+      "batch": "9/24",
+      "grams": null,
+      "id": "imp202609241",
+      "created": 1790222400001
+    },
+    {
+      "type": "use",
+      "itemId": "nitric",
+      "sizeId": null,
+      "qty": 1.5,
+      "date": "2026-09-24",
+      "note": "",
+      "batch": "9/24",
+      "grams": null,
+      "id": "imp202609242",
+      "created": 1790222400002
+    },
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s2",
+      "qty": 1,
+      "date": "2026-09-27",
+      "note": "",
+      "batch": "9/27",
+      "grams": null,
+      "id": "imp202609270",
+      "created": 1790481600000
+    },
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s4",
+      "qty": 1,
+      "date": "2026-09-27",
+      "note": "",
+      "batch": "9/27",
+      "grams": null,
+      "id": "imp202609271",
+      "created": 1790481600001
+    },
+    {
+      "type": "use",
+      "itemId": "nitric",
+      "sizeId": null,
+      "qty": 2.5,
+      "date": "2026-09-27",
+      "note": "",
+      "batch": "9/27",
+      "grams": null,
+      "id": "imp202609272",
+      "created": 1790481600002
+    },
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s2",
+      "qty": 1,
+      "date": "2026-09-30",
+      "note": "",
+      "batch": "9/30",
+      "grams": null,
+      "id": "imp202609300",
+      "created": 1790740800000
+    },
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s4",
+      "qty": 1,
+      "date": "2026-09-30",
+      "note": "",
+      "batch": "9/30",
+      "grams": null,
+      "id": "imp202609301",
+      "created": 1790740800001
+    },
+    {
+      "type": "use",
+      "itemId": "nitric",
+      "sizeId": null,
+      "qty": 3.5,
+      "date": "2026-09-30",
+      "note": "",
+      "batch": "9/30",
+      "grams": null,
+      "id": "imp202609302",
+      "created": 1790740800002
+    },
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s3",
+      "qty": 1,
+      "date": "2026-10-02",
+      "note": "",
+      "batch": "10/2",
+      "grams": null,
+      "id": "imp202610020",
+      "created": 1790913600000
+    },
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s1",
+      "qty": 1,
+      "date": "2026-10-02",
+      "note": "",
+      "batch": "10/2",
+      "grams": null,
+      "id": "imp202610021",
+      "created": 1790913600001
+    },
+    {
+      "type": "use",
+      "itemId": "nitric",
+      "sizeId": null,
+      "qty": 2.3,
+      "date": "2026-10-02",
+      "note": "",
+      "batch": "10/2",
+      "grams": null,
+      "id": "imp202610022",
+      "created": 1790913600002
+    },
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s4",
+      "qty": 1,
+      "date": "2026-10-04",
+      "note": "",
+      "batch": "10/4",
+      "grams": null,
+      "id": "imp202610040",
+      "created": 1791086400000
+    },
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s2",
+      "qty": 1,
+      "date": "2026-10-04",
+      "note": "",
+      "batch": "10/4",
+      "grams": null,
+      "id": "imp202610041",
+      "created": 1791086400001
+    },
+    {
+      "type": "use",
+      "itemId": "nitric",
+      "sizeId": null,
+      "qty": 3,
+      "date": "2026-10-04",
+      "note": "",
+      "batch": "10/4",
+      "grams": null,
+      "id": "imp202610042",
+      "created": 1791086400002
+    },
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s4",
+      "qty": 1,
+      "date": "2026-10-06",
+      "note": "",
+      "batch": "10/6",
+      "grams": null,
+      "id": "imp202610060",
+      "created": 1791259200000
+    },
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s2",
+      "qty": 1,
+      "date": "2026-10-06",
+      "note": "",
+      "batch": "10/6",
+      "grams": null,
+      "id": "imp202610061",
+      "created": 1791259200001
+    },
+    {
+      "type": "use",
+      "itemId": "nitric",
+      "sizeId": null,
+      "qty": 3,
+      "date": "2026-10-06",
+      "note": "",
+      "batch": "10/6",
+      "grams": null,
+      "id": "imp202610062",
+      "created": 1791259200002
+    },
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s4",
+      "qty": 1,
+      "date": "2026-10-07",
+      "note": "",
+      "batch": "10/7",
+      "grams": null,
+      "id": "imp202610070",
+      "created": 1791345600000
+    },
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s1",
+      "qty": 1,
+      "date": "2026-10-07",
+      "note": "",
+      "batch": "10/7",
+      "grams": null,
+      "id": "imp202610071",
+      "created": 1791345600001
+    },
+    {
+      "type": "use",
+      "itemId": "nitric",
+      "sizeId": null,
+      "qty": 2,
+      "date": "2026-10-07",
+      "note": "",
+      "batch": "10/7",
+      "grams": null,
+      "id": "imp202610072",
+      "created": 1791345600002
+    },
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s4",
+      "qty": 1,
+      "date": "2026-10-09",
+      "note": "",
+      "batch": "10/9",
+      "grams": null,
+      "id": "imp202610090",
+      "created": 1791518400000
+    },
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s1",
+      "qty": 1,
+      "date": "2026-10-09",
+      "note": "",
+      "batch": "10/9",
+      "grams": null,
+      "id": "imp202610091",
+      "created": 1791518400001
+    },
+    {
+      "type": "use",
+      "itemId": "nitric",
+      "sizeId": null,
+      "qty": 2,
+      "date": "2026-10-09",
+      "note": "",
+      "batch": "10/9",
+      "grams": null,
+      "id": "imp202610092",
+      "created": 1791518400002
+    },
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s6",
+      "qty": 2,
+      "date": "2026-10-11",
+      "note": "",
+      "batch": "10/11",
+      "grams": null,
+      "id": "imp202610110",
+      "created": 1791691200000
+    },
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s2",
+      "qty": 1,
+      "date": "2026-10-11",
+      "note": "",
+      "batch": "10/11",
+      "grams": null,
+      "id": "imp202610111",
+      "created": 1791691200001
+    },
+    {
+      "type": "use",
+      "itemId": "nitric",
+      "sizeId": null,
+      "qty": 4,
+      "date": "2026-10-11",
+      "note": "",
+      "batch": "10/11",
+      "grams": null,
+      "id": "imp202610112",
+      "created": 1791691200002
+    },
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s4",
+      "qty": 1,
+      "date": "2026-10-13",
+      "note": "",
+      "batch": "10/13",
+      "grams": null,
+      "id": "imp202610130",
+      "created": 1791864000000
+    },
+    {
+      "type": "use",
+      "itemId": "crucible",
+      "sizeId": "s1",
+      "qty": 1,
+      "date": "2026-10-13",
+      "note": "",
+      "batch": "10/13",
+      "grams": null,
+      "id": "imp202610131",
+      "created": 1791864000001
+    },
+    {
+      "type": "use",
+      "itemId": "nitric",
+      "sizeId": null,
+      "qty": 2,
+      "date": "2026-10-13",
+      "note": "",
+      "batch": "10/13",
+      "grams": null,
+      "id": "imp202610132",
+      "created": 1791864000002
+    }
+  ]
+}
