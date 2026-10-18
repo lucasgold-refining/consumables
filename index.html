@@ -94,6 +94,12 @@ table.sz th,table.sz td{padding:7px 3px}
 .period .top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
 .period .del{border:0;background:var(--redbg);color:var(--red);border-radius:10px;min-width:44px;min-height:40px;font-size:16px}
 .curlist{border-left:5px solid var(--green)}
+nav button{font-size:12px}
+.silvercard{border-left:5px solid #9aa4b2;text-align:center}
+.silvercard .big{font-size:40px}
+.tag.set{background:#eef2ff;color:#3538cd}
+.seg.three button{font-size:14px;padding:10px 4px}
+.seg button.on.set{color:#3538cd}
 </style>
 </head>
 <body>
@@ -103,6 +109,7 @@ table.sz th,table.sz td{padding:7px 3px}
   <button data-v="dash" class="on"><span class="ic">📊</span>Dashboard</button>
   <button data-v="add"><span class="ic">➕</span>Add</button>
   <button data-v="hist"><span class="ic">📜</span>History</button>
+  <button data-v="silver"><span class="ic">🥈</span>Silver</button>
   <button data-v="set"><span class="ic">⚙️</span>Settings</button>
 </nav>
 <div class="toast" id="toast"></div>
@@ -124,6 +131,7 @@ function defaultState() {
     ],
     entries: [],
     paid: [],
+    silver: [], // silver holdings log (kg) — separate from entries; never cleared by "Paid – start new list"
     mig: { prices: true, medium: true, stampUse: true, container: true }
   };
 }
@@ -160,6 +168,7 @@ function migrate(st) {
     st.mig.container = true;
   }
   if (!Array.isArray(st.paid)) st.paid = [];
+  if (!Array.isArray(st.silver)) st.silver = []; // v5: silver holdings tab
   st.version = 2;
   return st;
 }
@@ -231,7 +240,7 @@ let view = 'dash';
 let form = null; // {type,itemId,sizeId,editId}
 let histFilter = { item: '', type: '' };
 function go(v) { view = v; document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); render(); window.scrollTo(0, 0); }
-document.querySelectorAll('nav button').forEach(b => b.onclick = () => { if (b.dataset.v === 'add') form = null; go(b.dataset.v); });
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => { if (b.dataset.v === 'add') form = null; if (b.dataset.v === 'silver') silverForm = null; go(b.dataset.v); });
 
 function render() {
   const app = $('#app');
@@ -239,6 +248,7 @@ function render() {
   else if (view === 'add') { app.innerHTML = addHTML(); bindAdd(); }
   else if (view === 'hist') { app.innerHTML = histHTML(); }
   else if (view === 'set') { app.innerHTML = setHTML(); }
+  else if (view === 'silver') { app.innerHTML = silverHTML(); bindSilver(); }
 }
 
 function dashHTML() {
@@ -431,6 +441,84 @@ function delEntry(id) {
   S.entries = S.entries.filter(x => x.id !== id); save(); render(); toast('Deleted');
 }
 
+// ---------- silver holdings (kg) ----------
+// S.silver: [{id, type:'in'|'use'|'set', kg, date, batch, note, created}]. 'set' = physical count (balance becomes kg).
+let silverForm = null; // {type, editId}
+const fmtKg = n => (Math.round((Number(n) || 0) * 1000) / 1000).toLocaleString('en-GB', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+const silverSorted = list => (list || S.silver || []).slice().sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.created || 0) - (b.created || 0));
+function silverLedger(list) { // chronological, with running balance after each entry
+  let bal = 0; const out = [];
+  for (const e of silverSorted(list)) {
+    const q = Number(e.kg) || 0; const before = bal;
+    if (e.type === 'in') bal += q; else if (e.type === 'use') bal -= q; else if (e.type === 'set') bal = q;
+    bal = Math.round(bal * 1000) / 1000;
+    out.push({ e, before, after: bal });
+  }
+  return out;
+}
+function silverBalance(list) { const L = silverLedger(list); return L.length ? L[L.length - 1].after : 0; }
+const SILVER_T = { in: { tag: 'IN', name: 'Add silver', btn: 'Save – add silver', cls: 'gold' }, use: { tag: 'USE', name: 'Use silver', btn: 'Save – use silver', cls: '' }, set: { tag: 'COUNT', name: 'Set balance', btn: 'Save – set balance', cls: '' } };
+function silverHTML() {
+  const bal = silverBalance(); const L = silverLedger();
+  let h = `<div class="card silvercard"><div class="muted">Silver on hand</div>
+    <div class="big" id="silverBal">${fmtKg(bal)} <span class="unit">kg</span></div>
+    ${bal < 0 ? `<div class="warn">Balance is below zero. Use "Set balance" after a physical count.</div>` : ''}
+    <div class="row2"><button class="btn gold" onclick="startSilver('in')">＋ Add silver</button><button class="btn" onclick="startSilver('use')">− Use silver</button></div>
+    <button class="btn light" onclick="startSilver('set')">⚖️ Adjust / set balance (physical count)</button></div>`;
+  if (silverForm) {
+    const f = silverForm; const e = f.editId ? S.silver.find(x => x.id === f.editId) : null; const v = e || {};
+    if (e && !f.loaded) { f.type = e.type; f.loaded = true; }
+    const t = SILVER_T[f.type];
+    h += `<div class="card" id="silverForm"><h2>${e ? 'Edit silver entry' : t.name}</h2>
+      <div class="seg three"><button class="${f.type === 'in' ? 'on in' : ''}" data-st="in">＋ Add</button><button class="${f.type === 'use' ? 'on use' : ''}" data-st="use">− Use</button><button class="${f.type === 'set' ? 'on set' : ''}" data-st="set">⚖️ Set</button></div>
+      <div class="row2">
+        <div><label>${f.type === 'set' ? 'Counted balance (kg)' : 'Kilograms'}</label><input id="skg" type="number" inputmode="decimal" step="any" min="0" value="${esc(v.kg ?? '')}" placeholder="0.000"></div>
+        <div><label>Date</label><input id="sdate" type="date" value="${esc(v.date || todayISO())}"></div>
+      </div>
+      ${f.type === 'set' ? `<div class="muted" style="margin-top:4px">Silver on hand becomes this amount from this date.</div>` : ''}
+      ${f.type === 'use' ? `<label>Batch label (optional)</label><input id="sbatch" type="text" value="${esc(v.batch || '')}" placeholder="e.g. B-102">` : ''}
+      <label>Note (optional)</label><input id="snote" type="text" value="${esc(v.note || '')}" placeholder="${f.type === 'in' ? 'e.g. bought, recovered' : f.type === 'set' ? 'e.g. weighed on scale' : ''}">
+      <button class="btn ${t.cls}" id="silverSave">${e ? 'Save changes' : t.btn}</button>
+      <button class="btn light" onclick="silverForm=null;render()">Cancel</button></div>`;
+  }
+  const rows = L.slice().reverse().map(({ e, before, after }) => {
+    const main = e.type === 'set' ? `Set to ${fmtKg(e.kg)} kg <span class="muted">(${after - before >= 0 ? '+' : '−'}${fmtKg(Math.abs(after - before))})</span>` : `${e.type === 'in' ? '+' : '−'}${fmtKg(e.kg)} kg`;
+    const extra = [e.batch ? 'Batch ' + esc(e.batch) : '', e.note ? esc(e.note) : '', 'balance ' + fmtKg(after) + ' kg'].filter(Boolean).join(' · ');
+    return `<div class="hist silverrow"><span class="tag ${e.type}">${SILVER_T[e.type] ? SILVER_T[e.type].tag : '?'}</span>
+      <div class="body"><b>${main}</b><br><span class="muted">${fmtDate(e.date)} · ${extra}</span></div>
+      <div class="acts"><button aria-label="Edit" onclick="editSilver('${e.id}')">✏️</button><button aria-label="Delete" onclick="delSilver('${e.id}')">🗑️</button></div></div>`;
+  }).join('');
+  h += `<div class="card"><h2>Silver history <span class="muted">${L.length} entries</span></h2>${rows || '<div class="empty">No silver entries yet.<br>Tap <b>Set balance</b> to enter what you have now.</div>'}</div>
+    <div class="muted" style="text-align:center;padding:4px 8px">Silver is kept separately and is not cleared by “Paid – start new list”. It is included in Backup and CSV export.</div>`;
+  return h;
+}
+function startSilver(type) { silverForm = { type }; render(); const el = $('#silverForm'); if (el) el.scrollIntoView({ block: 'start' }); }
+function editSilver(id) { silverForm = { editId: id }; render(); const el = $('#silverForm'); if (el) el.scrollIntoView({ block: 'start' }); }
+function bindSilver() {
+  document.querySelectorAll('[data-st]').forEach(b => b.onclick = () => {
+    const o = {}; ['skg', 'sdate', 'snote', 'sbatch'].forEach(k => { const el = document.getElementById(k); if (el) o[k] = el.value; });
+    silverForm.type = b.dataset.st; render(); for (const k in o) { const el = document.getElementById(k); if (el) el.value = o[k]; }
+  });
+  const sb = $('#silverSave'); if (sb) sb.onclick = saveSilver;
+}
+function saveSilver() {
+  const f = silverForm; const kg = parseFloat($('#skg').value);
+  if (f.type === 'set' ? !(kg >= 0) : !(kg > 0)) return toast(f.type === 'set' ? 'Enter the counted kilograms' : 'Enter kilograms above 0');
+  const g = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  const e = { type: f.type, kg: Math.round(kg * 1000) / 1000, date: g('sdate') || todayISO(), note: g('snote') };
+  if (f.type === 'use') e.batch = g('sbatch');
+  let next;
+  if (f.editId) { const old = S.silver.find(x => x.id === f.editId); e.id = old.id; e.created = old.created; next = S.silver.map(x => x.id === f.editId ? e : x); }
+  else { e.id = uid(); e.created = Date.now(); next = S.silver.concat([e]); }
+  if (f.type === 'use' && silverBalance(next) < -1e-9 && !confirm(`This leaves ${fmtKg(silverBalance(next))} kg on hand (below zero). Save anyway?`)) return;
+  S.silver = next; save(); silverForm = null; render(); toast(f.editId ? 'Silver entry updated' : 'Saved ✓ ' + fmtKg(silverBalance()) + ' kg on hand');
+}
+function delSilver(id) {
+  const e = S.silver.find(x => x.id === id); if (!e) return;
+  if (!confirm(`Delete this silver entry?\n${SILVER_T[e.type].name}: ${fmtKg(e.kg)} kg on ${fmtDate(e.date)}`)) return;
+  S.silver = S.silver.filter(x => x.id !== id); if (silverForm && silverForm.editId === id) silverForm = null; save(); render(); toast('Deleted');
+}
+
 // ---------- settings ----------
 function setHTML() {
   const items = S.items.map(it => `<div class="setitem">
@@ -459,11 +547,11 @@ function setHTML() {
     <button class="btn danger" onclick="wipe()">Erase all data</button>
   </div>
   <div class="card"><h2>Paid – start new list</h2>
-    <div class="muted">When you've paid for everything on the current list, this saves a summary to <b>Paid periods</b> and clears the entries. Items, sizes, prices, warnings and container settings stay.</div>
+    <div class="muted">When you've paid for everything on the current list, this saves a summary to <b>Paid periods</b> and clears the entries. Items, sizes, prices, warnings and container settings stay. Silver on hand is not affected.</div>
     <button class="btn paid" onclick="openPaid()" ${S.entries.length ? '' : 'disabled style="opacity:.5"'}>✅ Paid – start new list</button>
   </div>
   ${paidListHTML()}
-  <div class="muted" style="text-align:center;padding:8px">${S.entries.length} entries · works offline</div>`;
+  <div class="muted" style="text-align:center;padding:8px">${S.entries.length} entries · ${(S.silver || []).length} silver entries · works offline</div>`;
 }
 function updItem(id, k, v) { const it = item(id); if (k === 'name' || k === 'unit' || k === 'packName') { v = String(v).trim(); if (!v) return render(); } it[k] = v; save(); toast('Saved'); render(); }
 function updSize(iid, sid, k, v) { const s = size(item(iid), sid); if (k === 'name') { v = String(v).trim(); if (!v) return render(); } s[k] = v; save(); toast('Saved'); }
@@ -497,7 +585,7 @@ function delItem(id) {
   if (!confirm(`Delete "${it.name}"${used ? ` and its ${used} entries` : ''}? This cannot be undone.`)) return;
   S.items = S.items.filter(i => i.id !== id); S.entries = S.entries.filter(e => e.itemId !== id); save(); render();
 }
-function wipe() { if (!confirm('Erase ALL items and entries from this phone? Make a backup first.')) return; if (!confirm('Really erase everything?')) return; S = defaultState(); save(); render(); toast('All data erased'); }
+function wipe() { if (!confirm('Erase ALL items, entries and silver records from this phone? Make a backup first.')) return; if (!confirm('Really erase everything?')) return; S = defaultState(); save(); render(); toast('All data erased'); }
 
 // ---------- paid periods ----------
 function periodSummary() { // totals for the current list of entries
@@ -567,7 +655,7 @@ function openPaid() {
     ${summaryHTML(p)}
     <button class="btn light" id="paidCSV">⬇️ Save CSV of these entries (optional)</button>
     ${carry.length ? `<label class="chk"><input type="checkbox" id="paidCarry" checked><span>Keep stock on hand in the new list (${carry.map(c => `${fmtQ(c.q, c.it)} ${esc(c.z ? c.z.name : c.it.unit)}`).join(', ')})</span></label>` : ''}
-    <div class="muted" style="margin-top:10px">This saves the totals above to <b>Paid periods</b> and clears all ${p.count} entries. Items, sizes, prices, warnings and container settings are kept.</div>
+    <div class="muted" style="margin-top:10px">This saves the totals above to <b>Paid periods</b> and clears all ${p.count} entries. Items, sizes, prices, warnings and container settings are kept. Silver on hand is not affected.</div>
     <button class="btn paid" id="paidOK">Mark as paid &amp; clear entries</button>
     <button class="btn light" id="paidCancel">Cancel</button></div>`;
   document.body.appendChild(m);
@@ -622,14 +710,17 @@ function exportCSV(list, name) {
       e.type === 'in' ? (e.cost != null && e.qty ? (e.cost / e.qty).toFixed(2) : '') : (entryCost(e) != null ? Number(e.unitPrice).toFixed(2) : ''),
       e.batch || '', e.grams ?? '', e.note || ''];
   });
+  if (!Array.isArray(list)) { // full export: add silver holdings log (Paid-list CSV covers consumables only)
+    for (const { e, after } of silverLedger()) rows.push([fmtDateNum(e.date), e.type === 'in' ? 'Silver in' : e.type === 'use' ? 'Silver use' : 'Silver count (set balance)', 'Silver', '', e.kg, 'kg', '', '', e.batch || '', '', [e.note || '', 'balance ' + fmtKg(after) + ' kg'].filter(Boolean).join(' · ')]);
+  }
   const csv = '\ufeff' + [head, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n');
   return deliver(name || `consumables-${stamp()}.csv`, csv, 'text/csv');
 }
 function exportJSON() { deliver(`consumables-backup-${stamp()}.json`, JSON.stringify({ app: 'refining-consumables', exported: new Date().toISOString(), ...S }, null, 2), 'application/json'); }
 function applyBackup(d) { // shared by file Restore and link import; returns true if data was replaced
   if (!d || !Array.isArray(d.items) || !Array.isArray(d.entries)) throw new Error('bad');
-  if (!confirm(`Restore backup with ${d.items.length} items and ${d.entries.length} entries? This replaces the data on this phone.`)) return false;
-  S = migrate({ version: d.version || 1, items: d.items, entries: d.entries, paid: Array.isArray(d.paid) ? d.paid : (S.paid || []), mig: d.mig || {} }); save(); render(); toast('Backup restored');
+  if (!confirm(`Restore backup with ${d.items.length} items and ${d.entries.length} entries${Array.isArray(d.silver) ? ` and ${d.silver.length} silver entries` : ''}? This replaces the data on this phone.${Array.isArray(d.silver) ? '' : ' Your silver records are kept.'}`)) return false;
+  S = migrate({ version: d.version || 1, items: d.items, entries: d.entries, paid: Array.isArray(d.paid) ? d.paid : (S.paid || []), silver: Array.isArray(d.silver) ? d.silver : (S.silver || []), mig: d.mig || {} }); save(); render(); toast('Backup restored');
   return true;
 }
 $('#restoreFile').onchange = async ev => {
