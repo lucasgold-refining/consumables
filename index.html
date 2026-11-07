@@ -94,6 +94,7 @@ table.sz th,table.sz td{padding:7px 3px}
 .batch:last-child{border-bottom:0}
 .batch b{white-space:normal}
 .btn.paid{background:var(--green);color:#fff}
+.btn:disabled,button:disabled{opacity:.5}
 .modal{position:fixed;inset:0;background:rgba(10,16,30,.55);z-index:30;display:flex;align-items:flex-end;justify-content:center}
 .modal .sheet{background:#fff;border-radius:18px 18px 0 0;width:100%;max-width:640px;max-height:92vh;overflow:auto;padding:16px 16px calc(16px + env(safe-area-inset-bottom));min-width:0}
 .modal h2{margin:0 0 6px;font-size:1.15rem;line-height:1.3}
@@ -127,7 +128,7 @@ table.sz th,table.sz td{padding:7px 3px}
 'use strict';
 const KEY = 'refining-consumables-v1';
 const NITRIC_ID = 'nitric';
-const APP_RELEASE = 'v7';
+const APP_RELEASE = 'v8';
 // v7: previous on-hand silver becomes regular. Flaked and in solution start at 0.
 // Historical use entries stay in history and are not added to in solution.
 const SILVER_MIG_NOTE = 'Previous on-hand silver was migrated to regular on hand. Flaked silver and silver in solution start at 0 kg. Historical use entries were kept and were not added to in solution.';
@@ -321,9 +322,9 @@ function dashHTML() {
       h += `<div class="card" id="card-${esc(it.id)}"><h2>${esc(it.name)} <span class="muted">used</span></h2>
       <div class="big">${fmtQ(tot.used, it)} <span class="unit">${esc(it.unit)}${packOf(it) ? ' ' + packTxt(tot.used, it) : ''}</span></div>
       ${p != null ? `<div class="grid"><div class="stat"><small>Price / ${esc(singular(it.unit))}</small><b>${pesoS(p)}</b></div><div class="stat"><small>Total cost</small><b>${pesoS(tot.useCost)}</b></div></div>`
-        : `<div class="muted" style="margin-top:6px">No price set, so ${esc(it.name.toLowerCase())} is not included in the total to pay. You can add a price per ${esc(singular(it.unit))} in Settings. Leave it blank to keep tracking ${esc(it.unit)} only.</div>`}
+        : `<div class="muted" style="margin-top:6px">No price per ${esc(singular(it.unit))}, so this is not in the amount to pay.</div>`}
       ${tot.perGram != null ? `<div class="muted" style="margin-top:6px">Per gram of gold: ${fmtQ(tot.perGram, { decimals: true })} ${esc(it.unit)}</div>` : ''}
-      ${it.id === NITRIC_ID && nitricUses().length ? `<button type="button" class="btn paid" id="payNitric-card" onclick="openPaidNitric()">✅ Paid nitric – start new list</button><div class="muted hint">Archives and clears nitric only. Crucibles and other items stay.</div>` : ''}</div>`;
+      ${it.id === NITRIC_ID && nitricUses().length ? `<button type="button" class="btn paid" id="payNitric-card" onclick="openPaidNitric()">✅ Pay nitric only</button><div class="muted hint">Clears nitric only. Other items and silver stay.</div>` : ''}</div>`;
     }
   }
   const empty = useEntries().length === 0 ? `<div class="card empty">No entries yet.<br>Tap <b>Add</b> to log what you used.</div>` : '';
@@ -422,8 +423,7 @@ function histHTML() {
   ${batchCostHTML()}
   <div class="card">${rows || '<div class="empty">No entries.</div>'}</div>
   <button type="button" class="btn light" onclick="exportCSV()">⬇️ Export CSV</button>
-  ${nitricUses().length ? `<button type="button" class="btn paid" id="payNitric-hist" onclick="openPaidNitric()">✅ Paid nitric – start new list</button>` : ''}
-  ${useEntries().length ? `<button type="button" class="btn paid" id="payAll-hist" onclick="openPaid()">✅ Paid – start new list</button>` : ''}
+  ${payActionsHTML('hist')}
   ${paidListHTML()}`;
 }
 function batchCostHTML() { // crucible (priced) cost per batch, grouped by date + batch label
@@ -520,7 +520,7 @@ function silverHTML() {
       <div class="stat" id="balFlaked"><small>Flaked on hand</small><b>${fmtKg(b.flaked)} kg</b></div>
       <div class="stat sol" id="balSolution"><small>In solution</small><b>${fmtKg(b.solution)} kg</b><small>Awaiting recovery</small></div>
     </div>
-    ${neg.length ? `<div class="warn">${esc(neg.join(', '))} below zero. Use Adjust / set balance after a physical count. Nothing is erased on its own.</div>` : ''}
+    ${neg.length ? `<div class="warn">${esc(neg.join(', '))} below zero. Use Set balance after a physical count. Nothing is erased on its own.</div>` : ''}
     <div class="actgrid">
       <button type="button" class="btn gold" onclick="startSilver('in')">＋ Add silver</button>
       <button type="button" class="btn" onclick="startSilver('use')">− Use silver</button>
@@ -654,7 +654,7 @@ function setHTML() {
       <div><label>Container name</label><input value="${esc(it.packName || 'containers')}" onchange="updItem('${it.id}','packName',this.value)"></div></div>` : ''}
     ${hasSizes(it) ? `<label>Size tags · unit price ₱</label>
       ${it.sizes.map(s => `<div class="sizerow"><input value="${esc(s.name)}" onchange="updSize('${it.id}','${s.id}','name',this.value)" ${s.archived ? 'style="opacity:.5"' : ''}><input class="price" data-size="${esc(s.name)}" type="number" inputmode="decimal" min="0" step="any" value="${esc(s.price ?? '')}" placeholder="₱" title="Unit price ₱" onchange="updSize('${it.id}','${s.id}','price',this.value===''?null:parseFloat(this.value))"><button type="button" class="iconbtn" aria-label="Remove size" onclick="delSize('${it.id}','${s.id}')">${s.archived ? '↩︎' : '✕'}</button></div>`).join('')}
-      <div class="muted" style="margin-top:4px">Name · price ₱ each · remove. Price changes apply to new entries only.</div>` : ''}
+      <div class="muted" style="margin-top:4px">Price changes apply to new entries only.</div>` : ''}
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
       <button type="button" class="btn sm light" onclick="addSize('${it.id}')">＋ Add size tag</button>
       <button type="button" class="btn sm danger" onclick="delItem('${it.id}')">Delete item</button>
@@ -668,13 +668,10 @@ function setHTML() {
     <button type="button" class="btn light" onclick="$('#restoreFile').click()">♻️ Restore from backup</button>
     <button type="button" class="btn danger" onclick="wipe()">Erase all data</button>
   </div>
-  <div class="card"><h2>Paid nitric – start new list</h2>
-    <div class="muted">Pay nitric acid on its own. This archives and clears only current nitric entries. Crucibles, other items, settings, silver balances, silver history and other paid periods stay as they are. Price per gallon is optional.</div>
-    <button type="button" class="btn paid" id="payNitric-set" onclick="openPaidNitric()" ${nit ? '' : 'disabled style="opacity:.5"'}>✅ Paid nitric – start new list</button>
-  </div>
-  <div class="card"><h2>Paid – start new list</h2>
-    <div class="muted">When you have paid for everything still on the current list, this saves that summary to <b>Paid periods</b> and clears those entries. Nitric you already paid separately is not archived again. Items, sizes, prices and container settings stay. Silver balances and silver history are not affected.</div>
-    <button type="button" class="btn paid" id="payAll-set" onclick="openPaid()" ${all ? '' : 'disabled style="opacity:.5"'}>✅ Paid – start new list</button>
+  <div class="card" id="paySettings"><h2>Payments</h2>
+    <div class="muted">Pay nitric on its own, or pay everything still open. Silver is not changed. The exact totals are shown before anything is cleared. Paid periods are listed below and in History.</div>
+    <button type="button" class="btn paid" id="payNitric-set" onclick="openPaidNitric()" ${nit ? '' : 'disabled'}>✅ Pay nitric only</button>
+    <button type="button" class="btn paid" id="payAll-set" onclick="openPaid()" ${all ? '' : 'disabled'}>✅ Pay whole list</button>
   </div>
   ${paidListHTML()}
   <div class="muted" style="text-align:center;padding:8px">${APP_RELEASE} · ${all} entries · ${(S.silver || []).length} silver entries · works offline</div>`;
@@ -758,18 +755,22 @@ function summaryHTML(p) {
     return `<div class="batch"><div><b>${esc(r.name)}</b><br><span class="muted">${fmtQ(r.used, iu)} ${esc(r.unit)} used${r.packSize ? ` ≈ ${packsOf(r.used, r.packSize).toLocaleString('en-GB', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${esc(r.packName)}` : ''}${r.costNote ? ' · ' + esc(r.costNote) : ''}</span></div><b>${r.priced ? pesoS(r.cost) : '–'}</b></div>`;
   }).join('') + `<div class="batch" style="font-size:1.05rem"><b>Overall total</b><b>${p.items.some(r => r.priced) ? pesoS(p.total) : '–'}</b></div>`;
 }
+function payActionsHTML(where) {
+  const nit = nitricUses().length, all = useEntries().length;
+  if (!nit && !all) return '';
+  return `<div class="card" id="settle-${where}"><h2>Payments</h2>
+    ${nit ? `<button type="button" class="btn paid" id="payNitric-${where}" onclick="openPaidNitric()">✅ Pay nitric only</button>` : ''}
+    ${all ? `<button type="button" class="btn paid" id="payAll-${where}" onclick="openPaid()">✅ Pay whole list</button>` : ''}
+    </div>`;
+}
 function curListHTML() {
   if (!useEntries().length) return '';
   const p = periodSummary();
-  const nit = nitricUses().length;
-  const others = useEntries().length - nit;
-  return `<div class="card curlist"><h2>Current list <span class="muted">${p.count} entries</span></h2>
+  return `<div class="card curlist" id="currentList"><h2>Current list <span class="muted">${p.count} entries</span></h2>
     <div class="muted">${rangeTxt(p.from, p.to)}</div>
     <div class="big" style="margin-top:4px">${pesoS(p.total)} <span class="unit">to pay</span></div>
-    ${nit ? `<button type="button" class="btn paid" id="payNitric-list" onclick="openPaidNitric()">✅ Paid nitric – start new list</button>
-      <div class="muted hint">Clears nitric acid only${others ? '. Crucibles and other items stay on this list' : ''}. Silver is not changed.</div>` : ''}
-    <button type="button" class="btn paid" id="payAll-list" onclick="openPaid()">✅ Paid – start new list</button>
-    <div class="muted hint">Clears every item still on this list. Nitric already archived is not archived again.</div></div>`;
+    <button type="button" class="btn paid" id="payAll-list" onclick="openPaid()">✅ Pay whole list</button>
+    <div class="muted hint">Clears every item still open.</div></div>`;
 }
 let paying = false;
 function openPaidSheet(kind) {
@@ -779,10 +780,10 @@ function openPaidSheet(kind) {
   closePaid();
   const p = periodSummary(nitric ? isNitricEntry : null);
   const m = document.createElement('div'); m.className = 'modal'; m.id = 'paidModal';
-  const title = nitric ? 'Paid nitric – start new list?' : 'Paid – start new list?';
+  const title = nitric ? 'Pay nitric only?' : 'Pay the whole list?';
   const note = nitric
-    ? `This saves the nitric totals above to Paid periods and clears only those nitric entries. Crucibles, other items, settings, silver balances, silver history and other paid periods are not changed.`
-    : `This saves the totals above to Paid periods and clears all ${p.count} entries still on the current list. Nitric already paid on its own is not included again. Items, sizes, prices and container settings are kept. Silver balances and silver history are not affected.`;
+    ? `Clears only these nitric entries. Other items, settings, silver and earlier paid periods stay as they are.`
+    : `Clears all ${p.count} entries still open. Anything already paid on its own is not included again. Items, prices and settings stay. Silver is not affected.`;
   const unpriced = nitric && p.items.some(r => !r.priced);
   m.innerHTML = `<div class="sheet" role="dialog" aria-label="${esc(title)}">
     <h2>✅ ${esc(title)}</h2>
@@ -791,7 +792,7 @@ function openPaidSheet(kind) {
     ${unpriced ? `<div class="muted hint">No price per gallon is set, so this nitric is archived in gallons and containers with no cost. Leaving the price blank is fine.</div>` : ''}
     <button type="button" class="btn light" id="paidCSV">⬇️ Save CSV of these entries (optional)</button>
     <div class="muted hint">${note}</div>
-    <button type="button" class="btn paid" id="paidOK">${nitric ? 'Mark nitric as paid & clear nitric only' : 'Mark as paid & clear entries'}</button>
+    <button type="button" class="btn paid" id="paidOK">${nitric ? 'Pay nitric only' : 'Pay whole list'}</button>
     <button type="button" class="btn light" id="paidCancel">Cancel</button></div>`;
   document.body.appendChild(m);
   m.addEventListener('click', ev => { if (ev.target === m) closePaid(); });

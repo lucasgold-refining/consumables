@@ -168,10 +168,10 @@ async function overflow(page, label) {
 }
 
 async function shot(page, name) {
-  await page.waitForFunction(() => {
+  await page.evaluate(() => {
     const t = document.querySelector('#toast');
-    return !t || !t.classList.contains('show');
-  }).catch(() => {});
+    if (t) { t.style.transition = 'none'; t.classList.remove('show'); t.style.opacity = '0'; }
+  });
   fs.mkdirSync(ART, { recursive: true });
   const file = path.join(ART, name + '.png');
   await page.screenshot({ path: file });
@@ -181,8 +181,8 @@ async function shot(page, name) {
 
 async function main() {
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  assert(sw.includes("const CACHE = 'consumables-v7'"), 'service worker cache is consumables-v7');
-  assert(!sw.includes('consumables-v6'), 'service worker no longer uses the v6 cache name');
+  assert(sw.includes("const CACHE = 'consumables-v8'"), 'service worker cache is consumables-v8');
+  assert(!sw.includes('consumables-v7'), 'service worker no longer uses the v7 cache name');
 
   const server = await startServer();
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -254,6 +254,40 @@ async function main() {
   assert(migText.includes('were not added to in solution'), 'silver screen explains the migration');
   const histText = await page.evaluate(() => document.querySelector('#app').innerText);
   assert(histText.includes('not moved into solution'), 'legacy use rows say they were not moved into solution');
+
+  await page.evaluate(() => go('dash'));
+  const dashPay = await page.evaluate(() => {
+    const labels = [...document.querySelectorAll('button')].map(b => b.textContent.replace(/\s+/g, ' ').trim());
+    const list = document.querySelector('#currentList');
+    return {
+      nitric: labels.filter(t => t.includes('Pay nitric only')).length,
+      whole: labels.filter(t => t.includes('Pay whole list')).length,
+      oldNitric: labels.some(t => t.includes('Paid nitric')),
+      oldWhole: labels.some(t => t.includes('Paid – start new list')),
+      card: !!document.querySelector('#payNitric-card'),
+      listNitric: !!document.querySelector('#payNitric-list'),
+      listText: list ? list.innerText : ''
+    };
+  });
+  assert(dashPay.nitric === 1 && dashPay.card && !dashPay.listNitric, 'dashboard has one nitric pay action, on the nitric card');
+  assert(!/Pay nitric/i.test(dashPay.listText), 'current list does not repeat the nitric pay action');
+  assert(dashPay.whole === 1 && dashPay.listText.includes('Pay whole list'), 'current list keeps one whole-list payment');
+  assert(!dashPay.oldNitric && !dashPay.oldWhole, 'dashboard no longer uses the long duplicate pay labels');
+  await page.evaluate(() => go('hist'));
+  const histPay = await page.evaluate(() => {
+    const labels = [...document.querySelectorAll('#settle-hist button')].map(b => b.textContent.replace(/\s+/g, ' ').trim());
+    return { nitric: labels.filter(t => t.includes('Pay nitric only')).length, whole: labels.filter(t => t.includes('Pay whole list')).length };
+  });
+  assert(histPay.nitric === 1 && histPay.whole === 1, 'history has one nitric action and one whole-list action');
+  await page.evaluate(() => go('set'));
+  const setPay = await page.evaluate(() => {
+    const root = document.querySelector('#paySettings');
+    const labels = [...root.querySelectorAll('button')].map(b => b.textContent.replace(/\s+/g, ' ').trim());
+    return { cards: document.querySelectorAll('#paySettings').length, nitric: labels.filter(t => t.includes('Pay nitric only')).length, whole: labels.filter(t => t.includes('Pay whole list')).length, text: root.innerText };
+  });
+  assert(setPay.cards === 1 && setPay.nitric === 1 && setPay.whole === 1, 'settings keeps both payments in one card');
+  assert(setPay.text.includes('Silver is not changed') && setPay.text.includes('before anything is cleared'), 'settings payment card keeps the safety note');
+  await page.evaluate(() => go('dash'));
 
   // legacy edit / delete must not create solution
   await editSilverKg(page, 's-use2', 2);
@@ -477,7 +511,7 @@ async function main() {
   const paidTxt = await page.$eval('#paidList', el => el.innerText);
   assert(paidTxt.includes('Nitric only') && paidTxt.includes('Full list'), 'paid history labels nitric and full archives');
   await page.evaluate(() => go('set'));
-  assert((await page.$eval('#app', el => el.innerText)).includes('v7'), 'settings shows release v7');
+  assert((await page.$eval('#app', el => el.innerText)).includes('v8'), 'settings shows release v8');
 
   // full pay first, then nitric must not archive again
   await boot(page, base, legacyState());
@@ -540,11 +574,40 @@ async function main() {
   await page.evaluate(() => { document.documentElement.style.fontSize = '16px'; });
   await shot(page, 'phone-dashboard-default');
   await overflow(page, 'dashboard default font');
+  await page.evaluate(() => { go('hist'); const el = document.querySelector('#settle-hist'); if (el) el.scrollIntoView({ block: 'start' }); });
+  await shot(page, 'phone-history');
+  await overflow(page, 'history default font');
+  await page.evaluate(() => { go('set'); const el = document.querySelector('#paySettings'); if (el) el.scrollIntoView({ block: 'start' }); });
+  await shot(page, 'phone-settings');
+  await overflow(page, 'settings default font');
+  await page.evaluate(() => startAdd());
+  await page.waitForSelector('#itemChips');
+  await shot(page, 'phone-add');
+  await overflow(page, 'add default font');
+  await page.evaluate(() => go('dash'));
   await page.evaluate(() => openPaidNitric());
   await page.waitForSelector('#paidModal');
+  const nitricDlg = await page.$eval('#paidModal', el => el.innerText);
+  assert(nitricDlg.includes('Pay nitric only') && nitricDlg.includes('Clears only these nitric entries'), 'nitric dialog keeps a distinct label and the safety detail');
   await shot(page, 'phone-nitric-pay-sheet');
   await overflow(page, 'nitric sheet default font');
   await clickSel(page, '#paidCancel');
+  await page.evaluate(() => openPaid());
+  await page.waitForSelector('#paidModal');
+  const wholeDlg = await page.$eval('#paidModal', el => el.innerText);
+  assert(wholeDlg.includes('Pay the whole list') && wholeDlg.includes('Silver is not affected'), 'whole-list dialog stays distinct and names silver');
+  await shot(page, 'phone-whole-pay-sheet');
+  await overflow(page, 'whole-list sheet default font');
+  await clickSel(page, '#paidCancel');
+  await page.setViewport({ width: 1280, height: 800, deviceScaleFactor: 1 });
+  await page.evaluate(() => go('dash'));
+  await overflow(page, 'dashboard wide screen');
+  const wide = await page.evaluate(() => {
+    const main = document.querySelector('main').getBoundingClientRect();
+    return main.width <= 640.5 && main.left >= 0;
+  });
+  assert(wide, 'wide screens keep the column centered and capped');
+  await page.setViewport({ width: 412, height: 915, deviceScaleFactor: 3.5, isMobile: true, hasTouch: true });
   await page.evaluate(() => go('silver'));
   await silverOp(page, { type: 'in', form: 'regular', kg: 1.5, note: 'synth' });
   await silverOp(page, { type: 'in', form: 'flaked', kg: 0.75, note: 'synth flake' });
@@ -561,12 +624,18 @@ async function main() {
   await page.evaluate(() => { const n = document.querySelector('#silverMigNote'); if (n) n.scrollIntoView({ block: 'center' }); });
   await shot(page, 'phone-silver-history');
   await page.evaluate(() => { document.documentElement.style.fontSize = '20.8px'; go('dash'); });
-  await page.waitForSelector('#payNitric-list');
+  await page.waitForSelector('#payNitric-card');
+  const largeDash = await page.evaluate(() => document.querySelectorAll('#payNitric-card').length === 1 && !document.querySelector('#payNitric-list'));
+  assert(largeDash, 'large font still shows a single nitric pay button on the nitric card');
   await shot(page, 'phone-dashboard-large-font');
   await overflow(page, 'dashboard large font');
   await page.evaluate(() => go('silver'));
   await shot(page, 'phone-silver-large-font');
   await overflow(page, 'silver large font');
+  await page.evaluate(() => startSilver('recover'));
+  await page.waitForSelector('#silverForm');
+  await overflow(page, 'silver recover form large font');
+  await page.evaluate(() => closeSilver());
   await page.evaluate(() => go('hist'));
   await overflow(page, 'history large font');
   await page.evaluate(() => go('set'));
@@ -577,6 +646,10 @@ async function main() {
   await page.evaluate(() => { go('dash'); openPaidNitric(); });
   await page.waitForSelector('#paidModal');
   await overflow(page, 'nitric sheet large font');
+  await clickSel(page, '#paidCancel');
+  await page.evaluate(() => openPaid());
+  await page.waitForSelector('#paidModal');
+  await overflow(page, 'whole-list sheet large font');
   await clickSel(page, '#paidCancel');
 
   await browser.close();
