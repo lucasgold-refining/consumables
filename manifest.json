@@ -1,7 +1,7 @@
 {
   "name": "Refining Consumables Tracker",
   "short_name": "Consumables",
-  "description": "Track nitric acid, crucibles and other refining consumables.",
+  "description": "Track nitric acid, crucibles, silver and other refining consumables.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
