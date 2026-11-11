@@ -110,12 +110,25 @@ async function clickSel(page, sel) {
   await page.evaluate(s => document.querySelector(s).click(), sel);
 }
 
-async function silverOp(page, { type, form, kg, confirm = true, expectOpen = false, note, batch }) {
+async function silverOp(page, opts) {
+  const confirm = opts.confirm !== false;
+  let type = opts.type, form = opts.form, from = opts.from, to = opts.to;
+  if (type === 'use') { type = 'move'; from = opts.form || 'regular'; to = 'solution'; }
+  else if (type === 'recover') { type = 'move'; from = 'solution'; to = opts.form || 'regular'; }
   await page.evaluate(ok => { window.confirm = () => ok; }, confirm);
   await page.evaluate(() => go('silver'));
   await page.evaluate(t => startSilver(t), type);
   await page.waitForSelector('#silverSave');
-  if (form) {
+  if (type === 'move') {
+    if (from) {
+      await page.evaluate(f => document.querySelector(`[data-from="${f}"]`).click(), from);
+      await page.waitForSelector('#silverSave');
+    }
+    if (to) {
+      await page.evaluate(t => document.querySelector(`[data-to="${t}"]:not([disabled])`).click(), to);
+      await page.waitForSelector('#silverSave');
+    }
+  } else if (form) {
     await page.evaluate(f => document.querySelector(`[data-sf="${f}"]`).click(), form);
     await page.waitForSelector('#silverSave');
   }
@@ -123,11 +136,11 @@ async function silverOp(page, { type, form, kg, confirm = true, expectOpen = fal
     const el = document.querySelector('#skg');
     el.value = v;
     el.dispatchEvent(new Event('input', { bubbles: true }));
-  }, String(kg));
-  if (note != null) await page.evaluate(v => { document.querySelector('#snote').value = v; }, note);
-  if (batch != null) await page.evaluate(v => { const el = document.querySelector('#sbatch'); if (el) el.value = v; }, batch);
+  }, String(opts.kg));
+  if (opts.note != null) await page.evaluate(v => { document.querySelector('#snote').value = v; }, opts.note);
+  if (opts.batch != null) await page.evaluate(v => { const el = document.querySelector('#sbatch'); if (el) el.value = v; }, opts.batch);
   await clickSel(page, '#silverSave');
-  if (expectOpen) await page.waitForSelector('#silverForm');
+  if (opts.expectOpen) await page.waitForSelector('#silverForm');
   else await page.waitForFunction(() => !document.querySelector('#silverForm'));
 }
 
@@ -181,8 +194,8 @@ async function shot(page, name) {
 
 async function main() {
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  assert(sw.includes("const CACHE = 'consumables-v8'"), 'service worker cache is consumables-v8');
-  assert(!sw.includes('consumables-v7'), 'service worker no longer uses the v7 cache name');
+  assert(sw.includes("const CACHE = 'consumables-v9'"), 'service worker cache is consumables-v9');
+  assert(!sw.includes('consumables-v8'), 'service worker no longer uses the v8 cache name');
 
   const server = await startServer();
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -305,8 +318,13 @@ async function main() {
   // ----- silver cycle on a clean book -----
   await boot(page, base, { version: 3, items: items(), entries: [], paid: [], silver: [], mig: { prices: true, medium: true, stampUse: true, container: true, silverForms: true } });
   await page.evaluate(() => go('silver'));
-  const help = await page.evaluate(() => { startSilver('use'); return document.querySelector('#silverForm').innerText; });
-  assert(help.includes('not written off') && help.includes('Regular') && help.includes('Flaked'), 'use form explains solution and offers both on-hand forms');
+  const actions = await page.evaluate(() => [...document.querySelectorAll('.actgrid button')].map(b => b.textContent.replace(/\s+/g, ' ').trim()));
+  assert(actions.length === 3 && actions.some(t => t.includes('Move silver')) && actions.some(t => t.includes('Add')) && actions.some(t => t.includes('Set balance')), 'silver tab actions are Move, Add, and Set balance');
+  assert(!actions.some(t => /Use silver|Recover silver/.test(t)), 'use and recover are not separate buttons');
+  const help = await page.evaluate(() => { startSilver('move'); return document.querySelector('#silverForm').innerText; });
+  assert(help.includes('not written off') && help.includes('Regular') && help.includes('Flaked') && help.includes('In solution'), 'move form covers solution and both on-hand forms');
+  const sameBlocked = await page.evaluate(() => document.querySelector('[data-to="regular"]').disabled);
+  assert(sameBlocked, 'move cannot select the same state for from and to');
   await page.evaluate(() => closeSilver());
 
   await silverOp(page, { type: 'in', form: 'regular', kg: 5, note: 'synth add' });
@@ -318,6 +336,7 @@ async function main() {
   near(b.flaked, 1.5, 'using flaked silver reduces flaked on hand');
   near(b.solution, 2.5, 'used silver from both forms waits in solution');
   near(b.onHand, 4.5, 'total on hand is regular plus flaked only');
+  near(b.all, 7, 'moving silver between states does not change all silver');
   await silverOp(page, { type: 'recover', form: 'regular', kg: 0.4, note: 'partial' });
   b = await bals(page);
   near(b.regular, 3.4, 'partial recovery returns the actual kg to regular');
@@ -329,14 +348,18 @@ async function main() {
   near(b.solution, 1.1, 'second partial recovery still keeps a remainder');
   near(b.regular, 3.4, 'flaked recovery does not change regular');
   st = await readState(page);
-  const useId = findSilver(st, { type: 'use', form: 'regular', kg: 2 }).id;
+  const useId = findSilver(st, { type: 'move', from: 'regular', to: 'solution', kg: 2 }).id;
   await editSilverKg(page, useId, 1.5);
   b = await bals(page);
   near(b.regular, 3.9, 'editing a use recomputes regular on hand');
   near(b.solution, 0.6, 'editing a use recomputes solution from the edited kg');
   near(b.flaked, 2.5, 'editing a regular use leaves flaked recovery in place');
   st = await readState(page);
-  const recId = findSilver(st, { type: 'recover', form: 'regular', kg: 0.4 }).id;
+  const editedMove = st.silver.find(e => e.id === useId);
+  assert(editedMove && editedMove.type === 'move' && editedMove.from === 'regular' && editedMove.to === 'solution' && editedMove.kg === 1.5, 'editing a move keeps its direction');
+  const movedLine = await page.evaluate(() => document.querySelector('#app').innerText);
+  assert(movedLine.includes('Moved') && movedLine.includes('Regular') && movedLine.includes('In solution'), 'history shows a move as one line');
+  const recId = findSilver(st, { type: 'move', from: 'solution', to: 'regular', kg: 0.4 }).id;
   await page.evaluate(() => { window.confirm = () => true; });
   await page.evaluate(id => { go('silver'); delSilver(id); }, recId);
   b = await bals(page);
@@ -370,7 +393,7 @@ async function main() {
   near(b.flaked, 0.5, 'that recovery increases flaked by the actual kg');
   near(b.regular, 3.5, 'that recovery does not change regular');
   const csv = await page.evaluate(() => buildExport().csv);
-  assert(csv.includes('Silver recovered') && csv.includes('Flaked') && csv.includes('In solution') && csv.includes('historical use not added to in solution') === false, 'csv lists recovered silver and forms');
+  assert(csv.includes('Silver moved') && csv.includes('Flaked') && csv.includes('In solution') && csv.includes('Regular → In solution') && csv.includes('historical use not added to in solution') === false, 'csv lists silver moves and forms');
   assert(!csv.includes('Week') && !csv.includes('Month'), 'csv does not add week or month stock columns');
   st = await readState(page);
   const roundTrip = JSON.parse(JSON.stringify({ version: st.version, items: st.items, entries: st.entries, paid: st.paid, silver: st.silver, mig: st.mig, silverMigration: st.silverMigration }));
@@ -382,12 +405,12 @@ async function main() {
   near(b.flaked, 0.5, 'restored flaked balance matches');
   near(b.solution, 0.75, 'restored solution balance matches');
   st = await readState(page);
-  assert(st.silver.some(e => e.type === 'recover' && e.form === 'flaked' && !e.legacy), 'restored recovery stays a recovery and is not marked legacy');
+  assert(st.silver.some(e => e.type === 'move' && e.from === 'solution' && e.to === 'flaked' && !e.legacy), 'restored move stays a move and is not marked legacy');
   const caller = JSON.parse(JSON.stringify(roundTrip));
   await page.evaluate(d => { window.confirm = () => false; return applyBackup(d); }, caller);
   const afterCancel = await bals(page);
   near(afterCancel.solution, 0.75, 'cancelling restore leaves balances as they were');
-  assert(caller.mig.silverForms === true && caller.silver.some(e => e.type === 'use' && !e.legacy), 'restore does not rewrite the backup object');
+  assert(caller.mig.silverForms === true && caller.silver.some(e => e.type === 'move' && !e.legacy), 'restore does not rewrite the backup object');
   const omitSilver = { version: 1, items: items(), entries: [{ id: 'x', type: 'use', itemId: 'borax', qty: 1, date: '2026-03-01', created: 1 }] };
   assert(await page.evaluate(d => { window.confirm = () => true; return applyBackup(d); }, omitSilver) === true, 'older backup without silver restores');
   b = await bals(page);
@@ -395,7 +418,7 @@ async function main() {
   near(b.flaked, 0.5, 'backup without silver keeps flaked silver');
   near(b.regular, 3.5, 'backup without silver keeps regular silver');
   st = await readState(page);
-  assert(st.silver.some(e => e.type === 'use' && !e.legacy), 'kept silver uses stay current entries');
+  assert(st.silver.some(e => e.type === 'move' && !e.legacy), 'kept silver moves stay current entries');
   assert(st.entries.length === 1 && st.entries[0].id === 'x', 'that backup still replaces consumable entries');
 
   // old backup with a single silver balance, and a backup that omits silver
@@ -511,7 +534,7 @@ async function main() {
   const paidTxt = await page.$eval('#paidList', el => el.innerText);
   assert(paidTxt.includes('Nitric only') && paidTxt.includes('Full list'), 'paid history labels nitric and full archives');
   await page.evaluate(() => go('set'));
-  assert((await page.$eval('#app', el => el.innerText)).includes('v8'), 'settings shows release v8');
+  assert((await page.$eval('#app', el => el.innerText)).includes('v9'), 'settings shows release v9');
 
   // full pay first, then nitric must not archive again
   await boot(page, base, legacyState());
@@ -618,6 +641,15 @@ async function main() {
   near(b.flaked, 0.95, 'screenshot book flaked balance');
   near(b.solution, 0.3, 'screenshot book keeps unrecovered solution');
   near(b.onHand, 10.2, 'screenshot book total on hand');
+  near(b.all, 10.5, 'screenshot book all silver includes solution');
+  await page.evaluate(() => go('silver'));
+  const head = await page.evaluate(() => ({
+    hero: document.querySelector('.silverhero').innerText,
+    bal: document.querySelector('#silverBal').innerText,
+    on: document.querySelector('#balOnHand').innerText
+  }));
+  assert(head.hero.includes('All silver') && head.bal.includes('10.500'), 'silver headline shows all silver');
+  assert(head.on.includes('On hand') && head.on.includes('10.200'), 'on-hand subtotal stays visible');
   await page.evaluate(() => go('silver'));
   await shot(page, 'phone-silver-balances');
   await overflow(page, 'silver default font');
@@ -632,7 +664,7 @@ async function main() {
   await page.evaluate(() => go('silver'));
   await shot(page, 'phone-silver-large-font');
   await overflow(page, 'silver large font');
-  await page.evaluate(() => startSilver('recover'));
+  await page.evaluate(() => startSilver('move'));
   await page.waitForSelector('#silverForm');
   await overflow(page, 'silver recover form large font');
   await page.evaluate(() => closeSilver());
