@@ -110,6 +110,12 @@ table.sz th,table.sz td{padding:7px 3px}
 .silvercard .big{font-size:clamp(1.8rem, 10vw, 2.5rem)}
 .stat.sol{background:#e7f1fb}
 .hint{margin-top:6px}
+.onhandline{display:inline-flex;align-items:baseline;justify-content:center;gap:6px;max-width:100%;background:#eef2f6;border-radius:999px;padding:6px 12px;margin-top:8px;font-size:.85rem}
+.onhandline b{font-size:1rem}
+.actgrid .wide{grid-column:1 / -1}
+.tag.move{background:#e0f2fe;color:#075985}
+.seg button.on.move{color:#075985}
+.chip:disabled{opacity:.4}
 </style>
 </head>
 <body>
@@ -128,7 +134,7 @@ table.sz th,table.sz td{padding:7px 3px}
 'use strict';
 const KEY = 'refining-consumables-v1';
 const NITRIC_ID = 'nitric';
-const APP_RELEASE = 'v8';
+const APP_RELEASE = 'v9';
 // v7: previous on-hand silver becomes regular. Flaked and in solution start at 0.
 // Historical use entries stay in history and are not added to in solution.
 const SILVER_MIG_NOTE = 'Previous on-hand silver was migrated to regular on hand. Flaked silver and silver in solution start at 0 kg. Historical use entries were kept and were not added to in solution.';
@@ -456,6 +462,9 @@ let silverForm = null; // {type, form, editId}
 const fmtKg = n => round3(n).toLocaleString('en-GB', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 const silverSorted = list => (list || S.silver || []).slice().sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.created || 0) - (b.created || 0));
 function formName(f) { return f === 'flaked' ? 'flaked' : f === 'solution' ? 'in solution' : 'regular'; }
+function formTitle(f) { return f === 'flaked' ? 'Flaked' : f === 'solution' ? 'In solution' : 'Regular'; }
+function normPlace(f) { return f === 'flaked' || f === 'solution' ? f : 'regular'; }
+function otherPlace(from, prefer) { if (prefer && prefer !== from) return prefer; return ['regular', 'flaked', 'solution'].find(x => x !== from); }
 function onHandForm(e) { return e && e.form === 'flaked' ? 'flaked' : 'regular'; }
 function applySilver(bal, e) {
   const q = round3(e.kg);
@@ -469,6 +478,10 @@ function applySilver(bal, e) {
     const f = onHandForm(e);
     bal.solution = round3(bal.solution - q);
     bal[f] = round3(bal[f] + q);
+  } else if (e.type === 'move') {
+    const from = e.from === 'flaked' || e.from === 'solution' ? e.from : 'regular';
+    const to = e.to === 'flaked' || e.to === 'solution' ? e.to : 'regular';
+    if (from !== to) { bal[from] = round3(bal[from] - q); bal[to] = round3(bal[to] + q); }
   } else if (e.type === 'set') {
     if (legacy) bal.regular = q;
     else bal[e.form === 'flaked' || e.form === 'solution' ? e.form : 'regular'] = q;
@@ -488,6 +501,7 @@ function silverBalances(list) {
   const L = silverLedger(list);
   const b = L.length ? { regular: L[L.length - 1].after.regular, flaked: L[L.length - 1].after.flaked, solution: L[L.length - 1].after.solution } : { regular: 0, flaked: 0, solution: 0 };
   b.onHand = round3(b.regular + b.flaked);
+  b.all = round3(b.regular + b.flaked + b.solution);
   return b;
 }
 function negativeSilver(b) {
@@ -501,20 +515,33 @@ const SILVER_T = {
   in: { tag: 'ADD', name: 'Add silver', btn: 'Save – add silver', cls: 'gold' },
   use: { tag: 'USE', name: 'Use silver', btn: 'Save – use silver', cls: '' },
   recover: { tag: 'BACK', name: 'Recover silver', btn: 'Save – recover silver', cls: 'gold' },
+  move: { tag: 'MOVE', name: 'Move silver', btn: 'Save – move silver', cls: 'gold' },
   set: { tag: 'COUNT', name: 'Set balance', btn: 'Save – set balance', cls: '' }
 };
-function silverHelp(type) {
-  if (type === 'in') return 'Adds to the on-hand form you choose. Silver in solution stays as it is.';
-  if (type === 'use') return 'Moves this amount from the on-hand form you choose into solution. It waits there until you recover it. It is not written off.';
-  if (type === 'recover') return 'Enter the kilograms you actually got back. That amount can be less than you used. In solution drops by this amount and the rest stays in solution.';
-  return 'Sets only the balance you choose, from a physical count. The other balances stay as they are.';
+function silverHelp(type, from, to) {
+  if (type === 'move') {
+    if (from === 'solution') return 'Kilograms you got back. Anything left stays in solution. All silver stays the same.';
+    if (to === 'solution') return 'Moves this into solution. It is not written off. All silver stays the same.';
+    return 'Moves between on-hand forms. All silver stays the same.';
+  }
+  if (type === 'in') return 'Adds bought or new silver. In solution is unchanged.';
+  if (type === 'use') return 'Moves this amount from the on-hand form you choose into solution. It is not written off.';
+  if (type === 'recover') return 'Kilograms you actually got back. Anything left stays in solution.';
+  return 'Sets only this balance, from a count. The others stay as they are.';
+}
+function silverModes(type) {
+  const modes = [['move', '⇄ Move'], ['in', '＋ Add'], ['set', '⚖ Set']];
+  if (type === 'use') modes.unshift(['use', '− Use']);
+  if (type === 'recover') modes.unshift(['recover', '↻ Recover']);
+  return modes;
 }
 function silverHTML() {
   const b = silverBalances(); const L = silverLedger();
   const neg = negativeSilver(b);
-  let h = `<div class="card silvercard"><div class="silverhero"><div class="muted">Total on hand</div>
-    <div class="big" id="silverBal">${fmtKg(b.onHand)} <span class="unit">kg</span></div>
-    <div class="muted">Regular and flaked together. In solution is separate until recovered.</div></div>
+  let h = `<div class="card silvercard"><div class="silverhero"><div class="muted">All silver</div>
+    <div class="big" id="silverBal">${fmtKg(b.all)} <span class="unit">kg</span></div>
+    <div class="muted">Regular, flaked, and in solution.</div>
+    <div class="onhandline" id="balOnHand">On hand <b>${fmtKg(b.onHand)} kg</b></div></div>
     <div class="silvergrid">
       <div class="stat" id="balRegular"><small>Regular on hand</small><b>${fmtKg(b.regular)} kg</b></div>
       <div class="stat" id="balFlaked"><small>Flaked on hand</small><b>${fmtKg(b.flaked)} kg</b></div>
@@ -522,32 +549,41 @@ function silverHTML() {
     </div>
     ${neg.length ? `<div class="warn">${esc(neg.join(', '))} below zero. Use Set balance after a physical count. Nothing is erased on its own.</div>` : ''}
     <div class="actgrid">
-      <button type="button" class="btn gold" onclick="startSilver('in')">＋ Add silver</button>
-      <button type="button" class="btn" onclick="startSilver('use')">− Use silver</button>
-      <button type="button" class="btn" onclick="startSilver('recover')">↻ Recover silver</button>
-      <button type="button" class="btn light" onclick="startSilver('set')">⚖ Set balance</button>
+      <button type="button" class="btn gold wide" id="silverMove" onclick="startSilver('move')">⇄ Move silver</button>
+      <button type="button" class="btn" id="silverAdd" onclick="startSilver('in')">＋ Add</button>
+      <button type="button" class="btn light" id="silverSet" onclick="startSilver('set')">⚖ Set balance</button>
     </div></div>`;
   if (silverForm) {
     const f = silverForm; const e = f.editId ? S.silver.find(x => x.id === f.editId) : null; const v = e || {};
-    if (e && !f.loaded) { f.type = e.type; f.form = e.form || 'regular'; f.loaded = true; }
+    if (e && !f.loaded) { f.type = e.type; f.form = e.form || 'regular'; f.from = e.from || (e.type === 'recover' ? 'solution' : 'regular'); f.to = e.to || (e.type === 'use' ? 'solution' : 'regular'); f.loaded = true; }
     if (!f.form) f.form = 'regular';
-    if (f.type !== 'set' && f.form === 'solution') f.form = 'regular';
+    if (f.type !== 'set' && f.type !== 'move' && f.form === 'solution') f.form = 'regular';
     if (e && e.legacy && f.type === 'set') f.form = 'regular';
-    const t = SILVER_T[f.type] || SILVER_T.in;
+    if (f.type === 'move') { f.from = normPlace(f.from || 'regular'); f.to = normPlace(f.to || 'solution'); if (f.from === f.to) f.to = otherPlace(f.from); }
+    const t = SILVER_T[f.type] || SILVER_T.move;
     const opts = f.type === 'set' && !(e && e.legacy)
       ? [['regular', 'Regular'], ['flaked', 'Flaked'], ['solution', 'In solution']]
       : [['regular', 'Regular'], ['flaked', 'Flaked']];
+    const places = [['regular', 'Regular'], ['flaked', 'Flaked'], ['solution', 'In solution']];
     const formLabel = f.type === 'use' ? 'Take from' : f.type === 'recover' ? 'Recover into' : f.type === 'set' ? 'Balance to set' : 'Add to';
+    const presetOn = (id) => f.type === 'move' && ((id === 'solution' && f.from === 'regular' && f.to === 'solution') || (id === 'recover' && f.from === 'solution' && f.to === 'regular') || (id === 'flake' && f.from === 'regular' && f.to === 'flaked'));
     h += `<div class="card" id="silverForm"><h2>${e ? 'Edit silver entry' : t.name}</h2>
-      <div class="seg"><button type="button" class="${f.type === 'in' ? 'on in' : ''}" data-st="in">＋ Add</button><button type="button" class="${f.type === 'use' ? 'on use' : ''}" data-st="use">− Use</button><button type="button" class="${f.type === 'recover' ? 'on recover' : ''}" data-st="recover">↻ Recover</button><button type="button" class="${f.type === 'set' ? 'on set' : ''}" data-st="set">⚖ Set</button></div>
-      <label>${formLabel}</label>
-      <div class="chips" id="formChips">${opts.map(([id, name]) => `<button type="button" class="chip ${f.form === id ? 'on' : ''}" data-sf="${id}">${name}</button>`).join('')}</div>
+      <div class="seg">${silverModes(f.type).map(([id, name]) => `<button type="button" class="${f.type === id ? 'on ' + id : ''}" data-st="${id}">${name}</button>`).join('')}</div>
+      ${f.type === 'move' ? `<div class="chips" id="movePresets">
+        <button type="button" class="chip ${presetOn('solution') ? 'on' : ''}" data-preset="solution">Into solution</button>
+        <button type="button" class="chip ${presetOn('recover') ? 'on' : ''}" data-preset="recover">From solution</button>
+        <button type="button" class="chip ${presetOn('flake') ? 'on' : ''}" data-preset="flake">To flaked</button>
+      </div>
+      <label>From</label><div class="chips" id="fromChips">${places.map(([id, name]) => `<button type="button" class="chip ${f.from === id ? 'on' : ''}" data-from="${id}">${name}</button>`).join('')}</div>
+      <label>To</label><div class="chips" id="toChips">${places.map(([id, name]) => `<button type="button" class="chip ${f.to === id ? 'on' : ''}" data-to="${id}" ${id === f.from ? 'disabled' : ''}>${name}</button>`).join('')}</div>`
+      : `<label>${formLabel}</label>
+      <div class="chips" id="formChips">${opts.map(([id, name]) => `<button type="button" class="chip ${f.form === id ? 'on' : ''}" data-sf="${id}">${name}</button>`).join('')}</div>`}
       <div class="row2">
         <div><label>${f.type === 'set' ? 'Counted amount (kg)' : f.type === 'recover' ? 'Recovered (kg)' : 'Kilograms'}</label><input id="skg" type="number" inputmode="decimal" step="any" min="0" value="${esc(v.kg ?? '')}" placeholder="0.000"></div>
         <div><label>Date</label><input id="sdate" type="date" value="${esc(v.date || todayISO())}"></div>
       </div>
-      <div class="muted hint">${silverHelp(f.type)}</div>
-      ${e && e.legacy && f.type !== 'recover' ? `<div class="muted hint">This earlier entry changes on-hand silver only. It does not move silver into or out of solution.</div>` : ''}
+      <div class="muted hint">${silverHelp(f.type, f.from, f.to)}</div>
+      ${e && e.legacy && (f.type === 'use' || f.type === 'in' || f.type === 'set') ? `<div class="muted hint">This earlier entry changes on-hand silver only. It does not move silver into or out of solution.</div>` : ''}
       ${f.type === 'use' ? `<label>Batch label (optional)</label><input id="sbatch" type="text" value="${esc(v.batch || '')}" placeholder="e.g. B-102">` : ''}
       <label>Note (optional)</label><input id="snote" type="text" value="${esc(v.note || '')}" placeholder="${f.type === 'in' ? 'e.g. bought' : f.type === 'recover' ? 'e.g. cemented, partial' : f.type === 'set' ? 'e.g. weighed on scale' : ''}">
       <div class="muted" id="silverPreview"></div>
@@ -556,19 +592,21 @@ function silverHTML() {
   }
   const rows = L.slice().reverse().map(({ e, before, after }) => {
     const main = silverLine(e, before, after);
-    const extra = [e.batch ? 'Batch ' + esc(e.batch) : '', e.note ? esc(e.note) : '', `regular ${fmtKg(after.regular)}`, `flaked ${fmtKg(after.flaked)}`, `solution ${fmtKg(after.solution)}`].filter(Boolean).join(' · ');
+    const allNow = round3(after.regular + after.flaked + after.solution);
+    const extra = [e.batch ? 'Batch ' + esc(e.batch) : '', e.note ? esc(e.note) : '', `all ${fmtKg(allNow)}`, `regular ${fmtKg(after.regular)}`, `flaked ${fmtKg(after.flaked)}`, `solution ${fmtKg(after.solution)}`].filter(Boolean).join(' · ');
     const tag = e.type === 'in' && e.legacy ? 'IN' : (SILVER_T[e.type] ? SILVER_T[e.type].tag : '?');
     return `<div class="hist silverrow"><span class="tag ${esc(e.type)}">${tag}</span>
       <div class="body"><b>${main}</b><br><span class="muted">${fmtDate(e.date)} · ${extra}</span></div>
       <div class="acts"><button type="button" aria-label="Edit" onclick="editSilver('${e.id}')">✏️</button><button type="button" aria-label="Delete" onclick="delSilver('${e.id}')">🗑️</button></div></div>`;
   }).join('');
   const showMig = (S.silver || []).some(e => e.legacy) || (S.silverMigration && S.silverMigration.legacyEntries > 0);
-  h += `<div class="card"><h2>Silver history <span class="muted">${L.length} entries</span></h2>${rows || '<div class="empty">No silver entries yet.<br>Tap <b>Add silver</b> or <b>Set balance</b> to enter what you have now.</div>'}</div>
+  h += `<div class="card"><h2>Silver history <span class="muted">${L.length} entries</span></h2>${rows || '<div class="empty">No silver entries yet.<br>Tap <b>Add</b> or <b>Move</b> to record silver.</div>'}</div>
     ${showMig ? `<div class="card" id="silverMigNote"><div class="muted">${esc((S.silverMigration && S.silverMigration.note) || SILVER_MIG_NOTE)}</div></div>` : ''}
     <div class="muted" style="text-align:center;padding:4px 8px">Silver balances and silver history are not cleared by payment. They are included in Backup and CSV export.</div>`;
   return h;
 }
 function silverLine(e, before, after) {
+  if (e.type === 'move') return `Moved ${fmtKg(e.kg)} kg ${formTitle(normPlace(e.from))} → ${formTitle(normPlace(e.to))}`;
   if (e.type === 'set') {
     const f = e.legacy ? 'regular' : (e.form === 'flaked' || e.form === 'solution' ? e.form : 'regular');
     const d = round3(after[f] - before[f]);
@@ -579,7 +617,10 @@ function silverLine(e, before, after) {
   return `+${fmtKg(e.kg)} kg ${formName(onHandForm(e))}`;
 }
 function closeSilver() { silverForm = null; render(); }
-function startSilver(type) { silverForm = { type, form: 'regular' }; render(); const el = $('#silverForm'); if (el) el.scrollIntoView({ block: 'start' }); }
+function startSilver(type) {
+  silverForm = { type, form: 'regular', from: 'regular', to: type === 'move' ? 'solution' : 'flaked' };
+  render(); const el = $('#silverForm'); if (el) el.scrollIntoView({ block: 'start' });
+}
 function editSilver(id) { silverForm = { editId: id }; render(); const el = $('#silverForm'); if (el) el.scrollIntoView({ block: 'start' }); }
 function keepSilverInputs() {
   const o = {}; ['skg', 'sdate', 'snote', 'sbatch'].forEach(k => { const el = document.getElementById(k); if (el) o[k] = el.value; }); return o;
@@ -587,8 +628,17 @@ function keepSilverInputs() {
 function bindSilver() {
   const keep = () => keepSilverInputs();
   const restore = o => { for (const k in o) { const el = document.getElementById(k); if (el) el.value = o[k]; } showSilverPreview(); };
-  document.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { const o = keep(); silverForm.type = b.dataset.st; render(); restore(o); });
+  document.querySelectorAll('[data-st]').forEach(b => b.onclick = () => { const o = keep(); silverForm.type = b.dataset.st; if (silverForm.type === 'move' && (!silverForm.from || !silverForm.to)) { silverForm.from = 'regular'; silverForm.to = 'solution'; } render(); restore(o); });
   document.querySelectorAll('[data-sf]').forEach(b => b.onclick = () => { const o = keep(); silverForm.form = b.dataset.sf; render(); restore(o); });
+  document.querySelectorAll('[data-from]').forEach(b => b.onclick = () => { const o = keep(); silverForm.from = b.dataset.from; if (silverForm.to === silverForm.from) silverForm.to = otherPlace(silverForm.from); render(); restore(o); });
+  document.querySelectorAll('[data-to]').forEach(b => b.onclick = () => { if (b.disabled) return; const o = keep(); silverForm.to = b.dataset.to; render(); restore(o); });
+  document.querySelectorAll('[data-preset]').forEach(b => b.onclick = () => {
+    const o = keep(); const p = b.dataset.preset;
+    if (p === 'recover') { silverForm.from = 'solution'; silverForm.to = 'regular'; }
+    else if (p === 'flake') { silverForm.from = 'regular'; silverForm.to = 'flaked'; }
+    else { silverForm.from = 'regular'; silverForm.to = 'solution'; }
+    render(); restore(o);
+  });
   ['skg', 'sdate', 'snote', 'sbatch'].forEach(id => { const el = document.getElementById(id); if (el) el.addEventListener('input', showSilverPreview); });
   const sb = $('#silverSave'); if (sb) sb.onclick = saveSilver;
   showSilverPreview();
@@ -603,6 +653,7 @@ function draftSilver(kg) {
     note: $('#snote') ? $('#snote').value.trim() : '',
     form: f.type !== 'set' ? (f.form === 'flaked' ? 'flaked' : 'regular') : (f.form === 'flaked' || f.form === 'solution' ? f.form : 'regular')
   };
+  if (f.type === 'move') { e.from = normPlace(f.from); e.to = normPlace(f.to); if (e.from === e.to) e.to = otherPlace(e.from); }
   if (f.type === 'use') e.batch = $('#sbatch') ? $('#sbatch').value.trim() : '';
   if (prev && prev.legacy && f.type !== 'recover') e.legacy = true;
   if (e.legacy && e.type === 'set') e.form = 'regular';
@@ -617,11 +668,12 @@ function showSilverPreview() {
   const e = draftSilver(kg);
   const next = e.id ? S.silver.map(x => x.id === e.id ? e : x) : S.silver.concat([Object.assign({ id: 'preview', created: Date.now() }, e)]);
   const b = silverBalances(next);
-  el.textContent = `After saving: regular ${fmtKg(b.regular)} kg · flaked ${fmtKg(b.flaked)} kg · in solution ${fmtKg(b.solution)} kg`;
+  el.textContent = `After saving: ${fmtKg(b.all)} kg all silver · on hand ${fmtKg(b.onHand)} kg · in solution ${fmtKg(b.solution)} kg`;
 }
 function saveSilver() {
   const f = silverForm; const kg = parseFloat($('#skg').value);
   if (f.type === 'set' ? !(kg >= 0) || isNaN(kg) : !(kg > 0)) return toast(f.type === 'set' ? 'Enter the counted kilograms' : 'Enter kilograms above 0');
+  if (f.type === 'move' && normPlace(f.from) === normPlace(f.to)) return toast('Choose two different states');
   const e = draftSilver(kg);
   let next;
   if (e.id) next = S.silver.map(x => x.id === e.id ? e : x);
@@ -631,7 +683,7 @@ function saveSilver() {
   const edited = !!f.editId;
   S.silver = next; save(); silverForm = null; render();
   const b = silverBalances();
-  toast(edited ? 'Silver entry updated' : `Saved ✓ ${fmtKg(b.onHand)} kg on hand · ${fmtKg(b.solution)} kg in solution`);
+  toast(edited ? 'Silver entry updated' : `Saved ✓ ${fmtKg(b.all)} kg all silver · ${fmtKg(b.onHand)} kg on hand`);
 }
 function delSilver(id) {
   const e = S.silver.find(x => x.id === id); if (!e) return;
@@ -890,8 +942,8 @@ function buildExport(list, name) {
   });
   if (!Array.isArray(list)) { // full export: add silver holdings log (Paid-list CSV covers consumables only)
     for (const { e, after } of silverLedger()) {
-      const kind = e.type === 'recover' ? 'Silver recovered' : e.type === 'in' ? 'Silver in' : e.type === 'use' ? 'Silver use' : 'Silver count (set balance)';
-      const formLabel = e.legacy && e.type === 'set' ? 'Regular' : e.form === 'flaked' ? 'Flaked' : e.form === 'solution' ? 'In solution' : 'Regular';
+      const kind = e.type === 'move' ? 'Silver moved' : e.type === 'recover' ? 'Silver recovered' : e.type === 'in' ? 'Silver in' : e.type === 'use' ? 'Silver use' : 'Silver count (set balance)';
+      const formLabel = e.type === 'move' ? `${formTitle(normPlace(e.from))} → ${formTitle(normPlace(e.to))}` : e.legacy && e.type === 'set' ? 'Regular' : e.form === 'flaked' ? 'Flaked' : e.form === 'solution' ? 'In solution' : 'Regular';
       const bits = [e.note || '', e.legacy && e.type === 'use' ? 'historical use not added to in solution' : '', `regular ${fmtKg(after.regular)} kg`, `flaked ${fmtKg(after.flaked)} kg`, `in solution ${fmtKg(after.solution)} kg`].filter(Boolean);
       rows.push([fmtDateNum(e.date), kind, 'Silver', formLabel, e.kg, 'kg', '', '', e.batch || '', '', bits.join(' · ')]);
     }
