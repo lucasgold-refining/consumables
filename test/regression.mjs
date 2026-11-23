@@ -194,8 +194,10 @@ async function shot(page, name) {
 
 async function main() {
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  assert(sw.includes("const CACHE = 'consumables-v9'"), 'service worker cache is consumables-v9');
-  assert(!sw.includes('consumables-v8'), 'service worker no longer uses the v8 cache name');
+  assert(sw.includes("const CACHE = 'consumables-v10'"), 'service worker cache is consumables-v10');
+  assert(sw.includes("k.startsWith('consumables-') && k !== CACHE"), 'activation deletes only consumables caches');
+  assert(!sw.includes('caches.match('), 'cache reads stay inside the consumables cache');
+  assert(!sw.includes('consumables-v9'), 'service worker no longer uses the v9 cache name');
 
   const server = await startServer();
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -683,6 +685,40 @@ async function main() {
   await page.waitForSelector('#paidModal');
   await overflow(page, 'whole-list sheet large font');
   await clickSel(page, '#paidCancel');
+
+  const cachePage = await browser.newPage();
+  await cachePage.goto(base + '/index.html?nosw=1', { waitUntil: 'domcontentloaded' });
+  const cacheResult = await cachePage.evaluate(async () => {
+    const iconUrl = new URL('./icons/icon-192.png', location.href).href;
+    const foreign = await caches.open('gold-tracker-v58');
+    await foreign.put(iconUrl, new Response('FOREIGN-GOLD', { headers: { 'Content-Type': 'text/plain' } }));
+    const old = await caches.open('consumables-v9');
+    await old.put(new URL('./old-consumables', location.href).href, new Response('old-consumables'));
+    const reg = await navigator.serviceWorker.register('./sw.js');
+    const incoming = reg.installing || reg.waiting;
+    if (incoming && incoming.state !== 'activated') {
+      await new Promise(resolve => {
+        incoming.addEventListener('statechange', () => {
+          if (incoming.state === 'activated' || incoming.state === 'redundant') resolve();
+        });
+      });
+    }
+    await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller) {
+      await new Promise(resolve => navigator.serviceWorker.addEventListener('controllerchange', resolve, { once: true }));
+    }
+    const keys = await caches.keys();
+    const foreignHit = await caches.open('gold-tracker-v58').then(c => c.match(iconUrl));
+    const iconRes = await fetch(iconUrl);
+    return { keys, foreignBody: foreignHit ? await foreignHit.text() : '', iconText: await iconRes.text(), active: !!(reg.active && reg.active.state === 'activated') };
+  });
+  assert(cacheResult.active, 'consumables service worker activates');
+  assert(cacheResult.keys.includes('gold-tracker-v58'), 'foreign gold-tracker-v58 cache survives activation');
+  assert(cacheResult.foreignBody === 'FOREIGN-GOLD', 'foreign cache contents stay intact');
+  assert(!cacheResult.keys.includes('consumables-v9'), 'old consumables-v9 cache is deleted');
+  assert(cacheResult.keys.includes('consumables-v10'), 'consumables-v10 cache is installed');
+  assert(cacheResult.iconText !== 'FOREIGN-GOLD', 'another app cache cannot answer a consumables request');
+  await cachePage.close();
 
   await browser.close();
   server.close();
